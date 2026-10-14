@@ -9,6 +9,7 @@ import { PartyAvatar } from "../../components/ui/PartyAvatar.tsx";
 import { RoleTags } from "../../components/ui/TypeTag.tsx";
 import { TypeTag } from "../../components/ui/TypeTag.tsx";
 import { Input } from "../../components/ui/Field.tsx";
+import { InstallCard } from "./InstallCard.tsx";
 import { listActivity } from "../../data/index.ts";
 import { useAllBalancesLive, usePartyList } from "../../hooks/useLive.ts";
 import { dayLabel, formatGram, formatINR } from "../../lib/format.ts";
@@ -44,6 +45,8 @@ export function HomePage() {
           Full summary ›
         </Link>
       </div>
+
+      <InstallCard />
 
       <Input placeholder="Search party…" value={q} onChange={(e) => setQ(e.target.value)} inputMode="search" />
 

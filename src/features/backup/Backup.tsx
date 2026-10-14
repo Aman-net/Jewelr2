@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Download, ShieldAlert, ShieldCheck, Tags, Upload } from "lucide-react";
 import { STORAGE_KEY } from "../../lib/persist.ts";
@@ -24,6 +24,57 @@ import { cn } from "../../lib/cn.ts";
 
 function countsLine(c: BackupCounts): string {
   return `${c.parties} parties · ${c.vouchers} vouchers · ${c.ledger_entries} ledger rows`;
+}
+
+/** Installability diagnostics: tells the operator exactly what's missing. */
+function InstallStatus() {
+  const [sw, setSw] = useState<string>("checking…");
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        const reg = await navigator.serviceWorker?.getRegistration();
+        if (live) setSw(reg ? `ready (${reg.active?.state ?? reg.installing?.state ?? "installing"})` : "not registered yet");
+      } catch {
+        if (live) setSw("unavailable");
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const standalone =
+    window.matchMedia?.("(display-mode: standalone)").matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+  const secure = window.isSecureContext;
+  const swSupported = "serviceWorker" in navigator;
+  const rows: [string, boolean][] = [
+    ["Installed app", standalone],
+    ["Secure origin (https/localhost)", secure],
+    ["Service worker supported", swSupported],
+  ];
+  return (
+    <div className="flex flex-col gap-1 text-xs">
+      {rows.map(([label, ok]) => (
+        <div key={label} className="flex items-center justify-between gap-2 text-stone-600">
+          <span>{label}</span>
+          <span className={ok ? "font-bold text-emerald-700" : "font-bold text-stone-400"}>
+            {ok ? "yes" : "no"}
+          </span>
+        </div>
+      ))}
+      <div className="flex items-center justify-between gap-2 text-stone-600">
+        <span>Offline shell</span>
+        <span className="font-bold text-stone-700">{sw}</span>
+      </div>
+      {!secure && (
+        <div className="rounded-lg bg-amber-50 px-2 py-1.5 font-medium text-amber-900">
+          Install needs https or localhost — plain-LAN http (e.g. 192.168.x.x) cannot install. Deploy to hosting first.
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function BackupPage() {
@@ -182,7 +233,8 @@ export function BackupPage() {
 
       <div className="text-xs font-semibold uppercase tracking-widest text-stone-500">About this app</div>
       <Card>
-        <div className="flex flex-col gap-1 text-xs text-stone-500">
+        <InstallStatus />
+        <div className="mt-2 flex flex-col gap-1 border-t border-stone-100 pt-2 text-xs text-stone-500">
           <div>Jewelr {APP_VERSION} · rules {CALCULATION_VERSION}</div>
           <div>{en.localOnly}</div>
           <div>
