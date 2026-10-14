@@ -1,5 +1,5 @@
-# Jewelr2
-2nd version of jeweler - a wholesale jewelry business digital ledger
+# Jewelr
+Wholesale jewelry business digital ledger
 
 Mobile-first installable PWA replacing the paper party ledger (khata) of one
 gold/silver wholesale shop. MVP validates the accounting model in parallel

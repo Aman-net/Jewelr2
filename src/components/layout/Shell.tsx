@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { Link, NavLink, Outlet } from "react-router";
 import { Home, Plus, Settings, Users, Wallet } from "lucide-react";
+import { GemMark } from "../ui/Logo.tsx";
 import { getLastBackupAt } from "../../data/index.ts";
 import { en } from "../../i18n/en.ts";
 import { daysSince } from "../../lib/format.ts";
@@ -37,9 +38,12 @@ export function Shell() {
   return (
     <div className="app-shell min-h-svh bg-stone-100">
       <header className="sticky top-0 z-10 border-b border-stone-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto max-w-xl px-4 py-2.5">
-          <div className="text-base font-semibold text-stone-900">{en.appName}</div>
-          <div className="text-[11px] leading-tight text-stone-500">{en.localOnly}</div>
+        <div className="mx-auto flex max-w-xl items-center gap-2 px-4 py-2.5">
+          <GemMark size={28} />
+          <div>
+            <div className="text-base font-semibold leading-tight text-stone-900">{en.appName}</div>
+            <div className="text-[11px] leading-tight text-stone-500">{en.localOnly}</div>
+          </div>
         </div>
         <BackupBanner />
       </header>

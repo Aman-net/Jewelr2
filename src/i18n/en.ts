@@ -3,7 +3,7 @@
  * can be added later without touching components.
  */
 export const en = {
-  appName: "Jewelr2 Hisaab",
+  appName: "Jewelr",
   localOnly: "Data stays on this device only — no cloud sync.",
   nav: { home: "Home", parties: "Parties", add: "Add", summary: "Summary", settings: "Settings" },
   backup: {

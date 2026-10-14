@@ -38,7 +38,7 @@ export function BackupPage() {
       const filename = `jewelr2-backup-${backup.exportedAt.slice(0, 10)}.json`;
       const file = new File([text], filename, { type: "application/json" });
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: "Jewelr2 backup" });
+        await navigator.share({ files: [file], title: "Jewelr backup" });
         setStatus("Backup shared. Keep the file somewhere safe — it is the only copy off this device.");
         return;
       }
@@ -69,7 +69,7 @@ export function BackupPage() {
       ])).some((c) => c > 0);
       setPending({ json, counts, empty: !nonEmpty });
     } catch (e) {
-      setError(e instanceof BackupError ? e.message : "Could not read that file — is it a Jewelr2 backup?");
+      setError(e instanceof BackupError ? e.message : "Could not read that file — is it a Jewelr backup?");
     }
   };
 
