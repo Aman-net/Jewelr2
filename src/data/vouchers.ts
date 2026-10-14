@@ -8,6 +8,7 @@ import type {
   BalanceDelta,
   ConversionInput,
   LedgerEntryDelta,
+  MiscChargeInput,
   SalePurchaseLine,
   SalePurchaseLineInput,
   SettlementInput,
@@ -24,6 +25,7 @@ import type {
   JewelrDb,
   LedgerEntryRow,
   ManualDeltaRow,
+  MiscChargeRow,
   SettlementRow,
   VoucherLineRow,
   VoucherRow,
@@ -42,6 +44,7 @@ export interface PostVoucherInput {
   conversion?: ConversionInput;
   opening?: BalanceDelta;
   adjustment?: BalanceDelta;
+  misc?: MiscChargeInput[];
   createdAt?: string;
 }
 
@@ -108,6 +111,8 @@ function toLineRow(l: SalePurchaseLine): VoucherLineRow {
     rateUnit: l.rateUnit,
     pricingMode: l.pricingMode,
     labourPaisePerGram: l.labourPaisePerGram,
+    labourMode: l.labourMode,
+    labourRatePaise: l.labourRatePaise,
     labourPaise: l.labourPaise,
     lineCashPaise: l.lineCashPaise,
     notes: l.notes,
@@ -162,6 +167,7 @@ async function addVoucherParts(
       voucherId: voucher.id,
       direction: c.direction,
       metalType: c.metalType,
+      side: c.side,
       fineMg: c.fineMg,
       rateAmountPaise: c.rateAmountPaise,
       rateUnit: c.rateUnit,
@@ -186,6 +192,15 @@ async function addVoucherParts(
       ...voucher.adjustment,
     };
     await dbx.manual_deltas.add(row);
+  }
+  if (voucher.misc.length > 0) {
+    const rows: MiscChargeRow[] = voucher.misc.map((m: MiscChargeInput) => ({
+      id: uuid(),
+      voucherId: voucher.id,
+      label: m.label,
+      cashPaise: m.cashPaise,
+    }));
+    await dbx.misc_charges.bulkAdd(rows);
   }
   await dbx.ledger_entries.add(toEntryRow(entry, voucher.createdAt));
 }
@@ -212,6 +227,7 @@ function writeTables(dbx: JewelrDb): Table[] {
     dbx.settlements,
     dbx.conversions,
     dbx.manual_deltas,
+    dbx.misc_charges,
     dbx.ledger_entries,
     dbx.app_settings,
   ];
@@ -221,6 +237,27 @@ function writeTables(dbx: JewelrDb): Table[] {
 async function rememberCategories(dbx: JewelrDb, voucher: Voucher): Promise<void> {
   for (const l of voucher.lines) {
     await recordCategoryUse(l.metalType, l.categoryName, dbx);
+  }
+}
+
+/**
+ * Role-direction rule (owner-confirmed 2026-10-15): SALE needs a customer,
+ * PURCHASE needs a supplier. Money flows (receipt/payment/conversion) and
+ * openings stay open to all roles. Unknown parties are rejected outright.
+ */
+export async function assertRoleDirection(
+  dbx: JewelrDb,
+  partyId: string,
+  type: VoucherType,
+): Promise<void> {
+  if (type !== "SALE" && type !== "PURCHASE") return;
+  const party = await dbx.parties.get(partyId);
+  if (!party) throw new Error("Unknown party — create the party first");
+  if (type === "SALE" && !party.isCustomer) {
+    throw new Error(`${party.name} is not a customer — sales are disabled here`);
+  }
+  if (type === "PURCHASE" && !party.isSupplier) {
+    throw new Error(`${party.name} is not a supplier — purchases are disabled here`);
   }
 }
 
@@ -266,9 +303,11 @@ export async function postVoucher(input: PostVoucherInput, dbx: JewelrDb = db): 
     conversion: input.conversion,
     opening: input.opening,
     adjustment: input.adjustment,
+    misc: input.misc,
   };
   // Pure validation + snapshot computation first — throws before any write.
   const voucher = buildVoucher(domainInput);
+  await assertRoleDirection(dbx, voucher.partyId, voucher.type);
   if (voucher.type === "OPENING") {
     await assertSingleOpening(dbx, voucher.partyId);
   }
@@ -379,6 +418,7 @@ export async function replaceVoucher(
   if (replacement.type === "OPENING") {
     await assertSingleOpening(dbx, replacement.partyId, originalId);
   }
+  await assertRoleDirection(dbx, replacement.partyId, replacement.type);
   const repVoucher = buildVoucher({
     id: repId,
     shopId: SHOP_ID,
@@ -393,6 +433,7 @@ export async function replaceVoucher(
     conversion: replacement.conversion,
     opening: replacement.opening,
     adjustment: replacement.adjustment,
+    misc: replacement.misc,
   });
   const repEntry = entryFromDeltas(repVoucher, voucherDeltas(repVoucher));
 
@@ -411,11 +452,12 @@ export async function replaceVoucher(
 export async function assembleVoucher(dbx: JewelrDb, id: string): Promise<Voucher | undefined> {
   const row = await dbx.vouchers.get(id);
   if (!row) return undefined;
-  const [lines, settlement, conversion, manuals] = await Promise.all([
+  const [lines, settlement, conversion, manuals, misc] = await Promise.all([
     dbx.voucher_lines.where("voucherId").equals(id).toArray(),
     dbx.settlements.where("voucherId").equals(id).first(),
     dbx.conversions.where("voucherId").equals(id).first(),
     dbx.manual_deltas.where("voucherId").equals(id).toArray(),
+    dbx.misc_charges.where("voucherId").equals(id).toArray(),
   ]);
   const opening = manuals.find((m) => m.kind === "OPENING");
   const adjustment = manuals.find((m) => m.kind === "ADJUSTMENT");
@@ -445,6 +487,10 @@ export async function assembleVoucher(dbx: JewelrDb, id: string): Promise<Vouche
         rateUnit: l.rateUnit as SalePurchaseLine["rateUnit"],
         pricingMode: l.pricingMode as SalePurchaseLine["pricingMode"],
         labourPaisePerGram: l.labourPaisePerGram,
+        // Legacy v1 rows stored per-gram rates; read them as per-kg (×1000).
+        labourMode: (l.labourMode ?? (l.labourPaisePerGram ? "PER_KG" : undefined)) as SalePurchaseLine["labourMode"],
+        labourRatePaise:
+          l.labourRatePaise ?? (l.labourPaisePerGram !== undefined ? l.labourPaisePerGram * 1000 : undefined),
         labourPaise: l.labourPaise,
         lineCashPaise: l.lineCashPaise,
         notes: l.notes,
@@ -466,6 +512,8 @@ export async function assembleVoucher(dbx: JewelrDb, id: string): Promise<Vouche
       ? {
           direction: conversion.direction as ConversionInput["direction"],
           metalType: conversion.metalType as ConversionInput["metalType"],
+          // Legacy v1 rows predate the side field; they were party-owes math.
+          side: (conversion.side ?? "PARTY_OWES") as ConversionInput["side"],
           fineMg: conversion.fineMg,
           rateAmountPaise: conversion.rateAmountPaise,
           rateUnit: conversion.rateUnit as ConversionInput["rateUnit"],
@@ -482,6 +530,9 @@ export async function assembleVoucher(dbx: JewelrDb, id: string): Promise<Vouche
           silverFineMg: adjustment.silverFineMg,
         }
       : null,
+    misc: misc
+      .map((m) => ({ label: m.label, cashPaise: m.cashPaise }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
     createdAt: row.createdAt,
   };
   return voucher;

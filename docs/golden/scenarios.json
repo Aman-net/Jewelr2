@@ -43,7 +43,8 @@
               "pricingMode": "CASH_AT_RATE",
               "rateAmountPaise": 10000000,
               "rateUnit": "GOLD_PER_10G",
-              "labourPaisePerGram": 5000
+              "labourMode": "PER_KG",
+              "labourRatePaise": 5000000
             }
           ]
         }
@@ -127,6 +128,7 @@
           "conversion": {
             "direction": "METAL_TO_CASH",
             "metalType": "GOLD",
+            "side": "PARTY_OWES",
             "fineMg": 10000,
             "rateAmountPaise": 12000000,
             "rateUnit": "GOLD_PER_10G"
@@ -134,6 +136,60 @@
         }
       ],
       "expect": { "P1": { "cashPaise": 12000000, "goldFineMg": 0, "silverFineMg": 0 } }
+    },
+    {
+      "id": "S006",
+      "title": "Cash-to-metal conversion on party-owes side (Ex.2)",
+      "status": "ILLUSTRATIVE",
+      "steps": [
+        {
+          "type": "OPENING",
+          "party": "P1",
+          "date": "2026-01-01",
+          "opening": { "cashPaise": 5000000, "goldFineMg": 100000, "silverFineMg": 0 }
+        },
+        {
+          "type": "CONVERSION",
+          "party": "P1",
+          "date": "2026-01-15",
+          "conversion": {
+            "direction": "CASH_TO_METAL",
+            "metalType": "GOLD",
+            "side": "PARTY_OWES",
+            "fineMg": 1000,
+            "rateAmountPaise": 10000000,
+            "rateUnit": "GOLD_PER_10G"
+          }
+        }
+      ],
+      "expect": { "P1": { "cashPaise": 4000000, "goldFineMg": 101000, "silverFineMg": 0 } }
+    },
+    {
+      "id": "S007",
+      "title": "Deposit conversion on shop-owes side (Ex.3)",
+      "status": "ILLUSTRATIVE",
+      "steps": [
+        {
+          "type": "OPENING",
+          "party": "P2",
+          "date": "2026-01-01",
+          "opening": { "cashPaise": -5000000, "goldFineMg": 0, "silverFineMg": 0 }
+        },
+        {
+          "type": "CONVERSION",
+          "party": "P2",
+          "date": "2026-01-15",
+          "conversion": {
+            "direction": "CASH_TO_METAL",
+            "metalType": "GOLD",
+            "side": "SHOP_OWES",
+            "fineMg": 5000,
+            "rateAmountPaise": 10000000,
+            "rateUnit": "GOLD_PER_10G"
+          }
+        }
+      ],
+      "expect": { "P2": { "cashPaise": 0, "goldFineMg": -5000, "silverFineMg": 0 } }
     }
   ]
 }

@@ -11,8 +11,8 @@ import { SuccessView } from "../../components/ui/Success.tsx";
 import { getLastRate, postVoucher, setLastRate } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import { GOLD_QUOTE_MG, SILVER_QUOTE_MG, cashToGoldFine, cashToSilverFine, fineToCash } from "../../domain/numeric/metalValue.ts";
-import type { BalanceDelta, ConversionDirection, MetalType, Voucher } from "../../domain/index.ts";
-import { usePartyList } from "../../hooks/useLive.ts";
+import type { BalanceDelta, ConversionDirection, ConversionSide, MetalType, Voucher } from "../../domain/index.ts";
+import { useBalancesLive, usePartyList } from "../../hooks/useLive.ts";
 import { en } from "../../i18n/en.ts";
 import { formatGram, formatINR, parseGramsToMg, parseRupeesToPaise, todayLocal } from "../../lib/format.ts";
 import { uuid } from "../../lib/uuid.ts";
@@ -24,6 +24,7 @@ interface Form {
   businessDate: string;
   direction: ConversionDirection;
   metal: MetalType;
+  side: ConversionSide;
   fineG: string;
   cash: string;
   rate: string;
@@ -49,6 +50,7 @@ export function ConversionForm() {
       businessDate: state.prefill?.businessDate ?? todayLocal(),
       direction: state.prefill?.direction ?? "METAL_TO_CASH",
       metal: state.prefill?.metal ?? "GOLD",
+      side: state.prefill?.side ?? "PARTY_OWES",
       fineG: state.prefill?.fineG ?? "",
       cash: state.prefill ? prefillCash(state.prefill) : "",
       rate: state.prefill?.rate ?? "",
@@ -58,9 +60,17 @@ export function ConversionForm() {
   const partyId = watch("partyId");
   const metal = watch("metal");
   const direction = watch("direction");
+  const side = watch("side");
   const cashRaw = watch("cash");
   const rateRaw = watch("rate");
   const partyName = (partyList ?? []).find((p) => p.id === partyId)?.name ?? "";
+  const dues = useBalancesLive(partyId || undefined);
+  const primaryDue = direction === "METAL_TO_CASH"
+    ? (metal === "GOLD" ? dues?.goldFineMg ?? 0 : dues?.silverFineMg ?? 0)
+    : (dues?.cashPaise ?? 0);
+  const sideMismatch =
+    partyId !== "" &&
+    ((side === "PARTY_OWES" && primaryDue <= 0) || (side === "SHOP_OWES" && primaryDue >= 0));
   const backTo = state.prefill?.partyId ?? params.get("party") ? `/parties/${state.prefill?.partyId ?? params.get("party")}` : "/vouchers/new";
   const { prompt, disarm } = useLeaveGuard(isDirty && !preview && !posted);
 
@@ -96,6 +106,7 @@ export function ConversionForm() {
         conversion: {
           direction: v.direction,
           metalType: v.metal,
+          side: v.side,
           fineMg,
           rateAmountPaise,
           rateUnit,
@@ -122,6 +133,7 @@ export function ConversionForm() {
         conversion: {
           direction: c.direction,
           metalType: c.metalType,
+          side: c.side,
           fineMg: c.fineMg,
           rateAmountPaise: c.rateAmountPaise,
           rateUnit: c.rateUnit,
@@ -181,12 +193,26 @@ export function ConversionForm() {
           <Card>
           <div className="flex flex-col gap-3">
             <PartyPicker value={partyId} onChange={(id) => setValue("partyId", id)} />
-            <div className="grid grid-cols-2 gap-2">
-              <Field label={en.voucher.date}><Input type="date" {...register("businessDate", { required: true })} max={todayLocal()} /></Field>
-              <Field label="Fine weight" unit={en.units.g}>
-                <AmountInput prefix="g" {...register("fineG")} inputMode="decimal" placeholder="0.000" />
-              </Field>
-            </div>
+            <Field label={en.voucher.date}><Input type="date" {...register("businessDate", { required: true })} max={todayLocal()} /></Field>
+            <Field label="Whose due moves?">
+              <Segmented
+                options={["PARTY_OWES", "SHOP_OWES"] as const}
+                value={side}
+                onChange={(s) => setValue("side", s)}
+                labels={{ PARTY_OWES: "Party owes me", SHOP_OWES: "I owe party" }}
+              />
+            </Field>
+            {partyId !== "" && dues !== undefined && (
+              <div className="rounded-xl bg-stone-50 px-3 py-2 text-sm text-stone-700">
+                Current dues — cash {formatINR(dues.cashPaise)}, gold {formatGram(dues.goldFineMg)}, silver {formatGram(dues.silverFineMg)}
+              </div>
+            )}
+            {sideMismatch && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+                No {direction === "METAL_TO_CASH" ? "metal" : "cash"} due on the picked side — this will
+                {side === "PARTY_OWES" ? " create a shop-owed balance" : " create a party-owed balance"}. Continue only if that is intended.
+              </div>
+            )}
             <Field label="Metal">
               <Segmented
                 options={["GOLD", "SILVER"] as const}

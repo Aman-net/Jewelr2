@@ -5,6 +5,7 @@ export type {
   ConversionRow,
   LedgerEntryRow,
   ManualDeltaRow,
+  MiscChargeRow,
   PartyRow,
   SettlementRow,
   VoucherLineRow,
@@ -14,6 +15,7 @@ export { createParty, getParty, listParties, searchParties, updateParty } from "
 export type { CreatePartyInput, UpdatePartyPatch } from "./parties.ts";
 export {
   assembleVoucher,
+  assertRoleDirection,
   assertSingleOpening,
   getVoucher,
   listVouchers,

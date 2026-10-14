@@ -40,12 +40,11 @@ function snapshotLine(
   voucherId: string,
   index: number,
   line: SalePurchaseLineInput,
-  voucherType: "SALE" | "PURCHASE",
 ): SalePurchaseLine {
   const billingTunch = selectBillingTunch(line.recordedTunchScaled, line.agreedTunchScaled);
   const fineMg = lineFineMg(line.physicalMg, billingTunch);
-  // Labour on physical weight, cash only (PROVISIONAL Q5). Kept separate from lineCashPaise.
-  const labourPaise = computeLabour(line.physicalMg, line.labourPaisePerGram, voucherType);
+  // Labour is cash-only, per piece or per kg, sale and purchase (owner-confirmed).
+  const labourPaise = computeLabour(line.physicalMg, line.itemCount, line.labourMode, line.labourRatePaise);
   let lineCashPaise = 0;
   if (isCashPriced(line.pricingMode)) {
     if (line.rateAmountPaise === undefined || line.rateUnit === undefined) {
@@ -94,6 +93,9 @@ export function buildVoucher(input: VoucherInput): Voucher {
   if (parsed.type === "SALE" || parsed.type === "PURCHASE") {
     if (!parsed.lines || parsed.lines.length === 0) throw new Error(`${parsed.type} requires lines`);
   }
+  if (parsed.misc && parsed.misc.length > 0 && parsed.type !== "SALE" && parsed.type !== "PURCHASE") {
+    throw new Error("Misc charges apply to SALE/PURCHASE only");
+  }
   if (parsed.type === "RECEIPT" || parsed.type === "PAYMENT") {
     const s = parsed.settlement;
     const total = (s?.cashPaise ?? 0) + (s?.goldPhysicalMg ?? 0) + (s?.silverPhysicalMg ?? 0);
@@ -108,8 +110,11 @@ export function buildVoucher(input: VoucherInput): Voucher {
 
   const lines: SalePurchaseLine[] =
     parsed.type === "SALE" || parsed.type === "PURCHASE"
-      ? (parsed.lines ?? []).map((l, i) => snapshotLine(parsed.id, i, l, parsed.type as "SALE" | "PURCHASE"))
+      ? (parsed.lines ?? []).map((l, i) => snapshotLine(parsed.id, i, l))
       : [];
+  const misc = (parsed.type === "SALE" || parsed.type === "PURCHASE") && parsed.misc
+    ? parsed.misc.map((m) => ({ label: m.label, cashPaise: m.cashPaise }))
+    : [];
 
   return {
     id: parsed.id,
@@ -127,6 +132,7 @@ export function buildVoucher(input: VoucherInput): Voucher {
     conversion: parsed.conversion ? snapshotConversion(parsed.conversion) : null,
     opening: parsed.opening ? { ...parsed.opening } : null,
     adjustment: parsed.adjustment ? { ...parsed.adjustment } : null,
+    misc,
     createdAt: parsed.createdAt,
   };
 }
@@ -144,27 +150,40 @@ function saleDeltas(v: Voucher): BalanceDelta {
       d.cashPaise += l.labourPaise;
     }
   }
+  for (const m of v.misc) d.cashPaise += m.cashPaise;
   return d;
 }
 
+/**
+ * Conversion with an explicit side (owner-confirmed 2026-10-15).
+ * The picked side's due shrinks; the other column grows by the equivalent.
+ * - METAL_TO_CASH + PARTY_OWES: metal −Y, cash +X (rate fixed on metal dues).
+ * - METAL_TO_CASH + SHOP_OWES: metal +Y, cash −X (shop's metal debt becomes cash debt).
+ * - CASH_TO_METAL mirrors both.
+ */
 function conversionDeltas(v: Voucher): BalanceDelta {
   const c = v.conversion;
   if (!c) throw new Error("CONVERSION voucher missing conversion snapshot");
   // Verify the snapshot matches the stored rate (rate immutability guard).
   const expected = fineToCash(c.fineMg, c.rateAmountPaise, quoteMgFor(c.rateUnit));
   if (expected !== c.cashPaise) throw new Error("Conversion snapshot inconsistent with stored rate");
+  const s = c.side === "PARTY_OWES" ? 1 : -1;
+  const metal = c.metalType === "GOLD" ? c.fineMg : 0;
+  const silver = c.metalType === "SILVER" ? c.fineMg : 0;
+  // sz() keeps -0 out of stored deltas (exact-equality tests distinguish it).
+  const sz = (n: number): number => (n === 0 ? 0 : n);
   if (c.direction === "METAL_TO_CASH") {
+    // Primary (metal) shrinks on the picked side; cash grows by the equivalent.
     return {
-      cashPaise: c.cashPaise,
-      goldFineMg: c.metalType === "GOLD" ? -c.fineMg : 0,
-      silverFineMg: c.metalType === "SILVER" ? -c.fineMg : 0,
+      cashPaise: s * c.cashPaise,
+      goldFineMg: sz(-s * metal),
+      silverFineMg: sz(-s * silver),
     };
   }
-  // CASH_TO_METAL: cash owed is reduced, metal owed grows by the fine equivalent.
   return {
-    cashPaise: -c.cashPaise,
-    goldFineMg: c.metalType === "GOLD" ? c.fineMg : 0,
-    silverFineMg: c.metalType === "SILVER" ? c.fineMg : 0,
+    cashPaise: -s * c.cashPaise,
+    goldFineMg: sz(s * metal),
+    silverFineMg: sz(s * silver),
   };
 }
 

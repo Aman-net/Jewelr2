@@ -35,6 +35,7 @@ export function buildReversal(spec: ReversalSpec): { voucher: Voucher; deltas: B
     conversion: null,
     opening: null,
     adjustment: null,
+    misc: [],
     createdAt: spec.createdAt,
   };
   return { voucher, deltas: negateDeltas(spec.originalDeltas) };

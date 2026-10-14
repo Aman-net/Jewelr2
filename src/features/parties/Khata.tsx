@@ -15,13 +15,19 @@ import { dayLabel, formatGram, formatINR, formatTime, todayLocal } from "../../l
 import { cn } from "../../lib/cn.ts";
 
 const entryActions = [
-  { to: "sale", label: "Sell", hint: "Gave goods", Icon: TrendingUp, tint: "bg-amber-100 text-amber-800" },
-  { to: "receipt", label: "Got", hint: "Received", Icon: ArrowDownToLine, tint: "bg-emerald-100 text-emerald-800" },
-  { to: "purchase", label: "Buy", hint: "Took goods", Icon: TrendingDown, tint: "bg-sky-100 text-sky-800" },
-  { to: "payment", label: "Gave", hint: "Paid out", Icon: ArrowUpFromLine, tint: "bg-orange-100 text-orange-800" },
-  { to: "conversion", label: "Rate", hint: "Fix rate", Icon: Percent, tint: "bg-violet-100 text-violet-800" },
-  { to: "opening", label: "Opening", hint: "Old balance", Icon: BookOpen, tint: "bg-stone-200 text-stone-700" },
+  { to: "sale", label: "Sell", hint: "Gave goods", Icon: TrendingUp, tint: "bg-amber-100 text-amber-800", needs: "customer" },
+  { to: "receipt", label: "Got", hint: "Received", Icon: ArrowDownToLine, tint: "bg-emerald-100 text-emerald-800", needs: null },
+  { to: "purchase", label: "Buy", hint: "Took goods", Icon: TrendingDown, tint: "bg-sky-100 text-sky-800", needs: "supplier" },
+  { to: "payment", label: "Gave", hint: "Paid out", Icon: ArrowUpFromLine, tint: "bg-orange-100 text-orange-800", needs: null },
+  { to: "conversion", label: "Rate", hint: "Fix rate", Icon: Percent, tint: "bg-violet-100 text-violet-800", needs: null },
+  { to: "opening", label: "Opening", hint: "Old balance", Icon: BookOpen, tint: "bg-stone-200 text-stone-700", needs: null },
 ] as const;
+
+function actionAllowed(party: { isCustomer: boolean; isSupplier: boolean }, needs: "customer" | "supplier" | null): boolean {
+  if (needs === "customer") return party.isCustomer;
+  if (needs === "supplier") return party.isSupplier;
+  return true;
+}
 
 const typeOptions = ["All", "SALE", "PURCHASE", "RECEIPT", "PAYMENT", "CONVERSION", "OPENING", "ADJUSTMENT", "REVERSAL"] as const;
 
@@ -118,17 +124,28 @@ export function KhataPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        {entryActions.map((a) => (
-          <Link key={a.to} to={`/vouchers/new/${a.to}?party=${party.id}`}>
-            <div className="flex flex-col items-center gap-1 rounded-2xl border border-stone-200 bg-white px-2 py-3 shadow-sm active:bg-amber-50">
+        {entryActions.map((a) => {
+          const allowed = actionAllowed(party, a.needs);
+          const tile = (
+            <div className={cn(
+              "flex flex-col items-center gap-1 rounded-2xl border border-stone-200 bg-white px-2 py-3 shadow-sm",
+              allowed ? "active:bg-amber-50" : "opacity-45",
+            )}>
               <span className={cn("flex h-9 w-9 items-center justify-center rounded-full", a.tint)}>
                 <a.Icon size={18} />
               </span>
               <span className="text-sm font-semibold text-stone-900">{a.label}</span>
-              <span className="-mt-1 text-[11px] text-stone-500">{a.hint}</span>
+              <span className="-mt-1 text-[11px] text-stone-500">
+                {allowed ? a.hint : a.needs === "customer" ? "customers only" : "suppliers only"}
+              </span>
             </div>
-          </Link>
-        ))}
+          );
+          return allowed ? (
+            <Link key={a.to} to={`/vouchers/new/${a.to}?party=${party.id}`}>{tile}</Link>
+          ) : (
+            <div key={a.to} aria-disabled="true">{tile}</div>
+          );
+        })}
       </div>
 
       <div className="flex items-center justify-between">

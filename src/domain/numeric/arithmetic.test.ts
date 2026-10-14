@@ -9,7 +9,7 @@ import {
   goldFineToCash,
   silverFineToCash,
 } from "./metalValue.ts";
-import { labourOnPhysical } from "./labour.ts";
+import { labourOnPhysical, labourPerKg, labourPerPiece } from "./labour.ts";
 import { roundHalfUp } from "./rounding.ts";
 
 describe("tunch to fine weight", () => {
@@ -53,6 +53,12 @@ describe("cash to fine", () => {
 describe("labour", () => {
   it("100 g physical at Rs 50/g = Rs 5,000", () => {
     expect(labourOnPhysical(100_000, 5000)).toBe(500_000);
+  });
+  it("per-kg rate normalizes by 1000 (Rs 50,000/kg on 100 g = Rs 5,000)", () => {
+    expect(labourPerKg(100_000, 5_000_000)).toBe(500_000);
+  });
+  it("per-piece rate multiplies count (4 pcs at Rs 25 = Rs 100)", () => {
+    expect(labourPerPiece(4, 2500)).toBe(10_000);
   });
   it("rounds half up to the paise", () => {
     expect(roundHalfUp("2.5")).toBe(3);

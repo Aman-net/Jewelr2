@@ -35,19 +35,34 @@ labour ₹  = round(physicalMg * labourPaisePerGram / 1000)
 | Q2 | Billing tunch | Party owes fine on **agreed** tunch; recorded is info only; receipts credit physical × tested tunch | `domain/rules/tunch.ts` |
 | Q3 | Mixed settlement | Each component hits its own column; order is UX only | `domain/rules/settlement.ts` |
 | Q4 | Opening unit | Opening metal is **fine** weight | `domain/rules/opening.ts` |
-| Q5 | Labour basis | On **physical** weight, cash only, sales only (purchases: 0) | `domain/rules/labour.ts` |
+| Q5 | Labour basis | **Owner-confirmed 2026-10-15:** cash-only, on SALE and PURCHASE, `PER_PIECE` (count required) or `PER_KG` (÷1000 internally) | `domain/rules/labour.ts` |
 | Q6 | Rounding | Half up, **line level**, to paise/mg, then sum | `domain/rules/rounding.ts` |
 | Q8 | Reversal dating | Reversal uses the **original** businessDate (rewrites as-of history) | `domain/rules/reversal.ts` |
+
+## Owner-confirmed additions (2026-10-15, confirmed in chat with worked examples)
+
+- **Misc charges:** voucher-level labelled cash extras on SALE/PURCHASE only;
+  sign follows voucher direction (sale +, purchase −).
+- **Conversion sides:** every conversion carries `side` (`PARTY_OWES` shrinks
+  party dues, `SHOP_OWES` shrinks shop dues) alongside direction. The four
+  confirmed cases (Ex.1–Ex.4 in chat 2026-10-15): metal→cash and cash→metal
+  on both sides, each shrinking the picked side and growing the other by the
+  rate equivalent. Over-conversion posts with a form-level warning, never a
+  block.
+- **One live opening per party** (data-layer rule, reversal-aware correction).
 
 Q7 (returns) and Q9 (payment modes) need no calculation rule in v0.1:
 returns = reversal + replacement/`ADJUSTMENT`; payment mode is a tag only.
 
-## Data-layer integrity rule (no brief rule, enforced in code)
+## Data-layer integrity rules (owner-confirmed, enforced in code)
 
-One **live** opening balance per party (`assertSingleOpening` in
-`data/vouchers.ts`). It may be posted at creation or later with a backdated
-as-of date, but a second opening is rejected — corrections go through
-reversal + replacement. Reversed openings don't count.
+- One **live** opening balance per party (`assertSingleOpening` in
+  `data/vouchers.ts`). It may be posted at creation or later with a backdated
+  as-of date, but a second opening is rejected — corrections go through
+  reversal + replacement. Reversed openings don't count.
+- **Role direction** (owner-confirmed 2026-10-15): SALE needs `isCustomer`,
+  PURCHASE needs `isSupplier` (`assertRoleDirection`). Unknown parties are
+  rejected. Money flows and openings stay open to all roles.
 
 ## Agent assumption (no brief rule)
 

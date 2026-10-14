@@ -14,8 +14,8 @@ import { getLastRate, postVoucher, setLastRate } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import { fineToCash, GOLD_QUOTE_MG, SILVER_QUOTE_MG } from "../../domain/numeric/metalValue.ts";
 import { fineFromPhysical } from "../../domain/numeric/tunch.ts";
-import { labourOnPhysical } from "../../domain/numeric/labour.ts";
-import type { BalanceDelta, MetalType, PricingMode, Voucher } from "../../domain/index.ts";
+import { labourPerKg, labourPerPiece } from "../../domain/numeric/labour.ts";
+import type { BalanceDelta, LabourMode, MetalType, PricingMode, Voucher } from "../../domain/index.ts";
 import { usePartyList } from "../../hooks/useLive.ts";
 import { en } from "../../i18n/en.ts";
 import { formatGram, formatINR, parseGramsToMg, parsePercentToScaled, parseRupeesToPaise, todayLocal } from "../../lib/format.ts";
@@ -33,7 +33,13 @@ interface LineForm {
   agreedTunch: string;
   mode: PricingMode;
   rate: string;
-  labour: string;
+  labourMode: LabourMode | "";
+  labourRate: string;
+}
+
+interface MiscForm {
+  label: string;
+  amount: string;
 }
 
 interface HeaderForm {
@@ -47,14 +53,33 @@ export interface SalePrefill {
   partyId?: string;
   businessDate?: string;
   lines?: Partial<LineForm>[];
+  misc?: Partial<MiscForm>[];
   correctedFrom?: string;
 }
 
 const TUNCH_SHORTCUTS = ["70", "75", "80", "85", "91.6", "100"];
 
 const emptyLine = (): LineForm => ({
-  metal: "SILVER", category: "", itemCount: "", physicalG: "", recordedTunch: "", agreedTunch: "", mode: "METAL_OPEN", rate: "", labour: "",
+  metal: "SILVER", category: "", itemCount: "", physicalG: "", recordedTunch: "", agreedTunch: "", mode: "METAL_OPEN", rate: "", labourMode: "", labourRate: "",
 });
+
+const emptyMisc = (): MiscForm => ({ label: "", amount: "" });
+
+/** Labour preview for a form line; 0 when unset. */
+function lineLabour(l: LineForm): number {
+  try {
+    if (!l.labourMode || !l.labourRate.trim()) return 0;
+    const rate = parseRupeesToPaise(l.labourRate);
+    if (l.labourMode === "PER_PIECE") {
+      const count = Number(l.itemCount);
+      if (!count || count <= 0) return 0;
+      return labourPerPiece(count, rate);
+    }
+    return labourPerKg(parseGramsToMg(l.physicalG), rate);
+  } catch {
+    return 0;
+  }
+}
 
 function lineHint(l: LineForm, kind: "SALE" | "PURCHASE"): string | null {
   try {
@@ -62,10 +87,12 @@ function lineHint(l: LineForm, kind: "SALE" | "PURCHASE"): string | null {
     if (physicalMg <= 0 || !l.agreedTunch.trim()) return null;
     const fine = fineFromPhysical(physicalMg, parsePercentToScaled(l.agreedTunch));
     const who = kind === "SALE" ? "Party owes" : "You owe";
-    if (l.mode === "METAL_OPEN") return `${who} fine ${formatGram(fine)}`;
+    const labour = lineLabour(l);
+    if (l.mode === "METAL_OPEN") {
+      return labour > 0 ? `${who} fine ${formatGram(fine)} + ${formatINR(labour)} labour` : `${who} fine ${formatGram(fine)}`;
+    }
     if (!l.rate.trim()) return `${who} fine ${formatGram(fine)} · enter rate`;
     const value = fineToCash(fine, parseRupeesToPaise(l.rate), l.metal === "GOLD" ? GOLD_QUOTE_MG : SILVER_QUOTE_MG);
-    const labour = l.labour.trim() && kind === "SALE" ? labourOnPhysical(physicalMg, parseRupeesToPaise(l.labour)) : 0;
     return `${who} ${formatINR(value + labour)}`;
   } catch {
     return null;
@@ -85,16 +112,18 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
   const [posting, setPosting] = useState(false);
   const [lastRates, setLastRates] = useState<Record<string, { amountPaise: number }>>({});
 
-  const { register, control, handleSubmit, setValue, watch, trigger } = useForm<HeaderForm & { lines: LineForm[] }>({
+  const { register, control, handleSubmit, setValue, watch, trigger } = useForm<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>({
     defaultValues: {
       partyId: prefill?.partyId ?? params.get("party") ?? "",
       businessDate: prefill?.businessDate ?? todayLocal(),
       referenceNumber: "",
       notes: prefill?.correctedFrom ? `Corrects ${prefill.correctedFrom}` : "",
       lines: prefill?.lines?.map((l) => ({ ...emptyLine(), ...l })) ?? [emptyLine()],
+      misc: prefill?.misc?.map((m) => ({ ...emptyMisc(), ...m })) ?? [],
     },
   });
   const { fields, append, remove } = useFieldArray({ control, name: "lines" });
+  const miscFields = useFieldArray({ control, name: "misc" });
   const partyId = watch("partyId");
   const partyList = usePartyList();
   const partyName = (partyList ?? []).find((p) => p.id === partyId)?.name ?? "";
@@ -114,6 +143,15 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
     setReviewError("");
     if (!partyId) {
       setReviewError("Choose the party first — whose khata is this?");
+      return;
+    }
+    const role = (partyList ?? []).find((p) => p.id === partyId);
+    if (kind === "SALE" && role && !role.isCustomer) {
+      setReviewError(`${role.name} is not a customer — sales are disabled here.`);
+      return;
+    }
+    if (kind === "PURCHASE" && role && !role.isSupplier) {
+      setReviewError(`${role.name} is not a supplier — purchases are disabled here.`);
       return;
     }
     setStep(1);
@@ -138,6 +176,10 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
           if (physicalMg <= 0) throw new Error(`Line ${i + 1}: weight must be positive`);
           const agreedTunchScaled = parsePercentToScaled(l.agreedTunch);
           const recorded = l.recordedTunch.trim();
+          const labour = l.labourMode ? l.labourRate.trim() : "";
+          if (l.labourMode === "PER_PIECE" && !l.itemCount.trim()) {
+            throw new Error(`Line ${i + 1}: pieces required for per-piece labour`);
+          }
           return {
             metalType: l.metal,
             categoryName: l.category.trim(),
@@ -148,10 +190,17 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
             pricingMode: l.mode,
             rateAmountPaise: l.mode === "CASH_AT_RATE" ? parseRupeesToPaise(l.rate) : undefined,
             rateUnit: l.mode === "CASH_AT_RATE" ? (l.metal === "GOLD" ? "GOLD_PER_10G" : "SILVER_PER_KG") : undefined,
-            labourPaisePerGram: l.labour.trim() ? parseRupeesToPaise(l.labour) : undefined,
+            labourMode: l.labourMode || undefined,
+            labourRatePaise: labour ? parseRupeesToPaise(labour) : undefined,
             notes: undefined,
           };
         }),
+        misc: v.misc
+          .filter((m) => m.label.trim() || m.amount.trim())
+          .map((m, i) => {
+            if (!m.label.trim()) throw new Error(`Charge ${i + 1}: label is required`);
+            return { label: m.label.trim(), cashPaise: parseRupeesToPaise(m.amount) };
+          }),
       });
       setPreview(built);
       setStep(2);
@@ -182,8 +231,10 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
           pricingMode: l.pricingMode,
           rateAmountPaise: l.rateAmountPaise,
           rateUnit: l.rateUnit,
-          labourPaisePerGram: l.labourPaisePerGram,
+          labourMode: l.labourMode,
+          labourRatePaise: l.labourRatePaise,
         })),
+        misc: preview.misc.map((m) => ({ label: m.label, cashPaise: m.cashPaise })),
       });
       for (const l of preview.lines) {
         if (l.pricingMode === "CASH_AT_RATE" && l.rateAmountPaise && l.rateUnit) {
@@ -285,6 +336,28 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
             />
           ))}
           <Button variant="secondary" type="button" onClick={() => { append(emptyLine()); void trigger(); }}>+ Add item</Button>
+          <Card>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-semibold text-stone-900">Extra charges (optional)</span>
+              <button type="button" className="text-sm font-medium text-amber-800" onClick={() => miscFields.append(emptyMisc())}>+ Add</button>
+            </div>
+            {miscFields.fields.length === 0 && (
+              <p className="text-xs text-stone-500">Packing, transport… added to the cash due.</p>
+            )}
+            <div className="flex flex-col gap-2">
+              {miscFields.fields.map((f, i) => (
+                <div key={f.id} className="grid grid-cols-[1fr_110px_auto] items-end gap-2">
+                  <Field label={i === 0 ? "Label" : ""}>
+                    <Input {...register(`misc.${i}.label`)} placeholder="e.g. Packing" />
+                  </Field>
+                  <Field label={i === 0 ? "₹" : ""}>
+                    <Input {...register(`misc.${i}.amount`)} inputMode="decimal" placeholder="0.00" />
+                  </Field>
+                  <button type="button" className="pb-2.5 text-sm font-medium text-red-700" onClick={() => miscFields.remove(i)}>✕</button>
+                </div>
+              ))}
+            </div>
+          </Card>
           <details className="rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
             <summary className="cursor-pointer text-sm font-medium text-stone-700">{en.more}</summary>
             <div className="pt-3">
@@ -306,15 +379,16 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
 function LineCard({ index, kind, register, watch, setValue, lastRate, onRemove }: {
   index: number;
   kind: "SALE" | "PURCHASE";
-  register: UseFormRegister<HeaderForm & { lines: LineForm[] }>;
-  watch: UseFormWatch<HeaderForm & { lines: LineForm[] }>;
-  setValue: UseFormSetValue<HeaderForm & { lines: LineForm[] }>;
+  register: UseFormRegister<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>;
+  watch: UseFormWatch<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>;
+  setValue: UseFormSetValue<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>;
   lastRate: { amountPaise: number } | undefined;
   onRemove?: () => void;
 }) {
   const metal = watch(`lines.${index}.metal`);
   const mode = watch(`lines.${index}.mode`);
   const agreed = watch(`lines.${index}.agreedTunch`);
+  const labourMode = watch(`lines.${index}.labourMode`);
   const line = watch(`lines.${index}`);
   const hint = lineHint(line, kind);
   return (
@@ -371,25 +445,26 @@ function LineCard({ index, kind, register, watch, setValue, lastRate, onRemove }
           </Field>
         )}
         <div className="grid grid-cols-2 gap-2">
-          {kind === "SALE" && (
-            <Field label="Labour" unit={en.units.perGram}>
-              <Input {...register(`lines.${index}.labour`)} inputMode="decimal" placeholder="0.00" />
-            </Field>
-          )}
-          <div className={kind === "SALE" ? "" : "col-span-2"}>
-            <details>
-              <summary className="cursor-pointer pt-2 text-sm font-medium text-stone-500">{en.more}</summary>
-              <div className="flex flex-col gap-3 pt-2">
-                <Field label="Pieces (optional)">
-                  <Input {...register(`lines.${index}.itemCount`)} inputMode="numeric" placeholder="—" />
-                </Field>
-                <Field label="Tested tunch (optional)" unit={en.units.percent}>
-                  <Input {...register(`lines.${index}.recordedTunch`)} inputMode="decimal" placeholder="—" />
-                </Field>
-              </div>
-            </details>
-          </div>
+          <Field label="Pieces">
+            <Input {...register(`lines.${index}.itemCount`)} inputMode="numeric" placeholder={labourMode === "PER_PIECE" ? "required" : "—"} />
+          </Field>
+          <Field label="Tested tunch (optional)" unit={en.units.percent}>
+            <Input {...register(`lines.${index}.recordedTunch`)} inputMode="decimal" placeholder="—" />
+          </Field>
         </div>
+        <Field label="Labour (optional)">
+          <Segmented
+            options={["", "PER_PIECE", "PER_KG"] as const}
+            value={labourMode}
+            onChange={(m) => setValue(`lines.${index}.labourMode`, m)}
+            labels={{ "": "None", PER_PIECE: "Per piece", PER_KG: "Per kg" }}
+          />
+        </Field>
+        {labourMode && (
+          <Field label="Labour rate" unit={labourMode === "PER_PIECE" ? "₹/pc" : "₹/kg"}>
+            <AmountInput prefix="₹" {...register(`lines.${index}.labourRate`)} inputMode="decimal" placeholder="0.00" />
+          </Field>
+        )}
         {hint ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-900">{hint}</div> : null}
       </div>
     </Card>

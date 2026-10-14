@@ -24,7 +24,7 @@ function base(overrides: Partial<VoucherInput> & { id: string; type: VoucherInpu
 }
 
 describe("SALE / PURCHASE posting", () => {
-  it("METAL_OPEN sale owes fine metal plus cash labour", () => {
+  it("METAL_OPEN sale owes fine metal plus cash labour (per kg)", () => {
     const v = buildVoucher(
       base({
         id: "33333333-3333-4333-8333-333333333333",
@@ -37,7 +37,8 @@ describe("SALE / PURCHASE posting", () => {
             recordedTunchScaled: 7950,
             agreedTunchScaled: 8000,
             pricingMode: "METAL_OPEN",
-            labourPaisePerGram: 2000,
+            labourMode: "PER_KG",
+            labourRatePaise: 2000000,
           },
         ],
       }),
@@ -61,7 +62,8 @@ describe("SALE / PURCHASE posting", () => {
             pricingMode: "CASH_AT_RATE",
             rateAmountPaise: 10_000_000,
             rateUnit: "GOLD_PER_10G",
-            labourPaisePerGram: 5000,
+            labourMode: "PER_KG",
+            labourRatePaise: 5000000,
           },
         ],
       }),
@@ -98,7 +100,7 @@ describe("SALE / PURCHASE posting", () => {
     expect(voucherDeltas(v)).toEqual({ cashPaise: 10_000_000, goldFineMg: 0, silverFineMg: 80_000 });
   });
 
-  it("PURCHASE mirrors SALE with negative signs; purchases carry no labour (Q5)", () => {
+  it("PURCHASE mirrors SALE with negative signs, including per-piece labour", () => {
     const v = buildVoucher(
       base({
         id: "66666666-6666-4633-8666-666666666666",
@@ -107,15 +109,87 @@ describe("SALE / PURCHASE posting", () => {
           {
             metalType: "GOLD",
             categoryName: "Old gold",
+            itemCount: 4,
             physicalMg: 20_000,
             agreedTunchScaled: 9000,
             pricingMode: "METAL_OPEN",
-            labourPaisePerGram: 5000,
+            labourMode: "PER_PIECE",
+            labourRatePaise: 2500,
           },
         ],
       }),
     );
-    expect(voucherDeltas(v)).toEqual({ cashPaise: 0, goldFineMg: -18_000, silverFineMg: 0 });
+    expect(v.lines[0]?.labourPaise).toBe(10_000);
+    expect(voucherDeltas(v)).toEqual({ cashPaise: -10_000, goldFineMg: -18_000, silverFineMg: 0 });
+  });
+
+  it("per-piece labour requires a count; misc applies to sale/purchase only", () => {
+    expect(() =>
+      buildVoucher(
+        base({
+          id: "66666666-6666-4633-8666-666666666667",
+          type: "SALE",
+          lines: [
+            {
+              metalType: "GOLD",
+              categoryName: "A",
+              physicalMg: 1000,
+              agreedTunchScaled: 10_000,
+              pricingMode: "METAL_OPEN",
+              labourMode: "PER_PIECE",
+              labourRatePaise: 100,
+            },
+          ],
+        }),
+      ),
+    ).toThrow(/itemcount/i);
+    expect(() =>
+      buildVoucher(
+        base({
+          id: "66666666-6666-4633-8666-666666666668",
+          type: "RECEIPT",
+          settlement: { cashPaise: 100 },
+          misc: [{ label: "Packing", cashPaise: 50 }],
+        }),
+      ),
+    ).toThrow(/SALE\/PURCHASE only/);
+  });
+
+  it("misc charges add signed cash on sale and purchase", () => {
+    const sale = buildVoucher(
+      base({
+        id: "66666666-6666-4633-8666-666666666669",
+        type: "SALE",
+        lines: [
+          {
+            metalType: "SILVER",
+            categoryName: "B",
+            physicalMg: 100_000,
+            agreedTunchScaled: 8000,
+            pricingMode: "METAL_OPEN",
+          },
+        ],
+        misc: [{ label: "Packing", cashPaise: 500 }],
+      }),
+    );
+    expect(voucherDeltas(sale)).toEqual({ cashPaise: 500, goldFineMg: 0, silverFineMg: 80_000 });
+    const buy = buildVoucher(
+      base({
+        id: "66666666-6666-4633-8666-666666666670",
+        type: "PURCHASE",
+        lines: [
+          {
+            metalType: "SILVER",
+            categoryName: "B",
+            physicalMg: 100_000,
+            agreedTunchScaled: 8000,
+            pricingMode: "METAL_OPEN",
+          },
+        ],
+        misc: [{ label: "Transport", cashPaise: 700 }],
+      }),
+    );
+    expect(voucherDeltas(buy)).toEqual({ cashPaise: -700, goldFineMg: 0, silverFineMg: -80_000 });
   });
 
   it("rejects mismatched rate units and missing rates", () => {
@@ -163,7 +237,7 @@ describe("RECEIPT / PAYMENT / CONVERSION / OPENING / ADJUSTMENT", () => {
     expect(voucherDeltas(p)).toEqual({ cashPaise: 1_000_000, goldFineMg: 0, silverFineMg: 40_000 });
   });
 
-  it("CONVERSION moves fine to cash at the stored rate", () => {
+  it("CONVERSION moves fine to cash at the stored rate (party-owes side)", () => {
     const v = buildVoucher(
       base({
         id: "bbbbbbbb-bbbb-4b33-8bbb-bbbbbbbbbbbb",
@@ -171,6 +245,7 @@ describe("RECEIPT / PAYMENT / CONVERSION / OPENING / ADJUSTMENT", () => {
         conversion: {
           direction: "METAL_TO_CASH",
           metalType: "GOLD",
+          side: "PARTY_OWES",
           fineMg: 10_000,
           rateAmountPaise: 12_000_000,
           rateUnit: "GOLD_PER_10G",
@@ -179,6 +254,51 @@ describe("RECEIPT / PAYMENT / CONVERSION / OPENING / ADJUSTMENT", () => {
     );
     expect(v.conversion?.cashPaise).toBe(12_000_000);
     expect(voucherDeltas(v)).toEqual({ cashPaise: 12_000_000, goldFineMg: -10_000, silverFineMg: 0 });
+  });
+
+  it("CONVERSION covers all four confirmed cases (Ex.1–Ex.4)", () => {
+    const convert = (
+      id: string,
+      direction: "METAL_TO_CASH" | "CASH_TO_METAL",
+      side: "PARTY_OWES" | "SHOP_OWES",
+    ) =>
+      voucherDeltas(
+        buildVoucher(
+          base({
+            id,
+            type: "CONVERSION",
+            conversion: {
+              direction,
+              metalType: "GOLD",
+              side,
+              fineMg: 10_000,
+              rateAmountPaise: 10_000_000,
+              rateUnit: "GOLD_PER_10G",
+            },
+          }),
+        ),
+      );
+    // Unit math throughout: 10,000 mg fine @ 10,000,000 paise/10g = 10,000,000 paise.
+    expect(convert("c1000000-0000-4000-8000-000000000001", "METAL_TO_CASH", "PARTY_OWES")).toEqual({
+      cashPaise: 10_000_000,
+      goldFineMg: -10_000,
+      silverFineMg: 0,
+    });
+    expect(convert("c2000000-0000-4000-8000-000000000002", "CASH_TO_METAL", "PARTY_OWES")).toEqual({
+      cashPaise: -10_000_000,
+      goldFineMg: 10_000,
+      silverFineMg: 0,
+    });
+    expect(convert("c3000000-0000-4000-8000-000000000003", "CASH_TO_METAL", "SHOP_OWES")).toEqual({
+      cashPaise: 10_000_000,
+      goldFineMg: -10_000,
+      silverFineMg: 0,
+    });
+    expect(convert("c4000000-0000-4000-8000-000000000004", "METAL_TO_CASH", "SHOP_OWES")).toEqual({
+      cashPaise: -10_000_000,
+      goldFineMg: 10_000,
+      silverFineMg: 0,
+    });
   });
 
   it("OPENING sets starting deltas in fine weight (Q4)", () => {

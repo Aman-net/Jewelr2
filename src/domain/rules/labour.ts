@@ -1,17 +1,22 @@
-import { labourOnPhysical } from "../numeric/labour.ts";
+import { labourPerKg, labourPerPiece } from "../numeric/labour.ts";
+import type { LabourMode } from "../types.ts";
 
 /**
- * PROVISIONAL rule Q5 — labour basis.
- * Owner decision (2026-10-14): labour on PHYSICAL weight, paise per gram, cash only.
- * Sales carry labour; purchases carry none unless explicitly entered.
- * TODO(owner): Q5 — confirm labour never applies to purchases; share a bill showing labour math.
+ * Owner-confirmed labour rule (2026-10-15, was PROVISIONAL Q5): cash-only,
+ * on SALE and PURCHASE lines, PER_PIECE (item count required) or PER_KG.
  */
 export function computeLabour(
   physicalMg: number,
-  labourPaisePerGram: number | undefined,
-  voucherType: "SALE" | "PURCHASE",
+  itemCount: number | undefined,
+  mode: LabourMode | undefined,
+  ratePaise: number | undefined,
 ): number {
-  if (labourPaisePerGram === undefined || labourPaisePerGram === 0) return 0;
-  if (voucherType === "PURCHASE") return 0;
-  return labourOnPhysical(physicalMg, labourPaisePerGram);
+  if (mode === undefined || ratePaise === undefined || ratePaise === 0) return 0;
+  if (mode === "PER_PIECE") {
+    if (itemCount === undefined || itemCount <= 0) {
+      throw new Error("Per-piece labour needs a positive item count");
+    }
+    return labourPerPiece(itemCount, ratePaise);
+  }
+  return labourPerKg(physicalMg, ratePaise);
 }

@@ -7,6 +7,10 @@
 export type MetalType = "GOLD" | "SILVER";
 export type RateUnit = "GOLD_PER_10G" | "SILVER_PER_KG";
 export type PricingMode = "CASH_AT_RATE" | "METAL_OPEN";
+/** Labour basis, owner-confirmed 2026-10-15: per piece or per kg, sale and purchase. */
+export type LabourMode = "PER_PIECE" | "PER_KG";
+/** Which side's due a conversion moves. Owner-confirmed 2026-10-15. */
+export type ConversionSide = "PARTY_OWES" | "SHOP_OWES";
 export type VoucherType =
   | "OPENING"
   | "SALE"
@@ -46,6 +50,9 @@ export interface SalePurchaseLineInput {
   pricingMode: PricingMode;
   rateAmountPaise?: number;
   rateUnit?: RateUnit;
+  /** Labour basis; rate is per piece or per kg depending on mode. */
+  labourMode?: LabourMode;
+  labourRatePaise?: number;
   labourPaisePerGram?: number;
   notes?: string;
 }
@@ -76,10 +83,18 @@ export interface SettlementSnapshot extends SettlementInput {
 export interface ConversionInput {
   direction: ConversionDirection;
   metalType: MetalType;
+  /** Which side's due moves. PARTY_OWES: shrink party dues; SHOP_OWES: shrink shop dues. */
+  side: ConversionSide;
   /** Fine weight moved. */
   fineMg: number;
   rateAmountPaise: number;
   rateUnit: RateUnit;
+}
+
+/** Voucher-level extra charges (packing, transport…): label + cash, owner-confirmed 2026-10-15. */
+export interface MiscChargeInput {
+  label: string;
+  cashPaise: number;
 }
 
 export interface VoucherInput {
@@ -96,6 +111,8 @@ export interface VoucherInput {
   lines?: SalePurchaseLineInput[];
   settlement?: SettlementInput;
   conversion?: ConversionInput;
+  /** Explicit cash extras, SALE/PURCHASE only. Sign follows voucher direction. */
+  misc?: MiscChargeInput[];
   /** Opening deltas, only for OPENING vouchers. PROVISIONAL Q4. */
   opening?: BalanceDelta;
   /** Explicit manual delta, only for ADJUSTMENT vouchers (e.g. returns handling, Q7). */
@@ -103,13 +120,14 @@ export interface VoucherInput {
   createdAt: string;
 }
 
-export interface Voucher extends Omit<VoucherInput, "lines" | "settlement" | "conversion" | "opening" | "adjustment"> {
+export interface Voucher extends Omit<VoucherInput, "lines" | "settlement" | "conversion" | "opening" | "adjustment" | "misc"> {
   calculationVersion: string;
   lines: SalePurchaseLine[];
   settlement: SettlementSnapshot | null;
   conversion: (ConversionInput & { cashPaise: number }) | null;
   opening: BalanceDelta | null;
   adjustment: BalanceDelta | null;
+  misc: MiscChargeInput[];
 }
 
 /** Sign convention: positive = party owes shop; negative = shop owes party. */
