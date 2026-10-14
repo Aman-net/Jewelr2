@@ -4,6 +4,7 @@ import { Link, useLocation, useParams } from "react-router";
 import { ArrowDownToLine, ArrowUpFromLine, BookOpen, Percent, TrendingDown, TrendingUp } from "lucide-react";
 import { Button } from "../../components/ui/Button.tsx";
 import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
+import { LoadingRow } from "../../components/ui/Loader.tsx";
 import { Sheet } from "../../components/ui/Bits.tsx";
 import { TypeTag, RoleTags } from "../../components/ui/TypeTag.tsx";
 import { Field, Input, Select } from "../../components/ui/Field.tsx";
@@ -80,7 +81,7 @@ export function KhataPage() {
     return take.length > 0 ? [{ ...g, rows: take }] : [];
   });
 
-  if (party === undefined) return <Page title=""><Card><p className="text-sm text-stone-500">Loading khata…</p></Card></Page>;
+  if (party === undefined) return <Page title=""><LoadingRow label="Loading khata…" /></Page>;
   if (!party) return <Page title="Khata"><Card><p className="text-sm text-stone-500">Party not found.</p></Card></Page>;
 
   const cash = balances?.cashPaise ?? 0;
@@ -140,7 +141,7 @@ export function KhataPage() {
         </div>
       </div>
 
-      {entries === undefined && <Card><p className="text-sm text-stone-500">Loading…</p></Card>}
+      {entries === undefined && <LoadingRow />}
       {entries !== undefined && groups.length === 0 && (
         <Card><p className="text-sm text-stone-500">No entries yet. Tap Sell or Got above to record the first one.</p></Card>
       )}

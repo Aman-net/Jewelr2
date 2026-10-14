@@ -6,6 +6,7 @@ import { Pencil, Undo2 } from "lucide-react";
 import { Button } from "../../components/ui/Button.tsx";
 import { Sheet } from "../../components/ui/Bits.tsx";
 import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
+import { LoadingRow } from "../../components/ui/Loader.tsx";
 import { Field, Textarea } from "../../components/ui/Field.tsx";
 import { toneForVoucher } from "../../components/ui/Flow.tsx";
 import { TypeTag, MetalTag } from "../../components/ui/TypeTag.tsx";
@@ -45,7 +46,7 @@ export function VoucherDetailPage() {
   const [error, setError] = useState("");
   const partyList = usePartyList();
 
-  if (stored === undefined) return <Page title=""><Card><p className="text-sm text-stone-500">Loading…</p></Card></Page>;
+  if (stored === undefined) return <Page title=""><LoadingRow /></Page>;
   if (!stored) return <Page title="Voucher"><Card><p className="text-sm text-stone-500">Voucher not found.</p></Card></Page>;
   const { voucher: v, entry: e } = stored;
   const partyName = (partyList ?? []).find((p) => p.id === v.partyId)?.name ?? "";

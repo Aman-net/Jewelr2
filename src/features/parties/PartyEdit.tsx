@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Button } from "../../components/ui/Button.tsx";
 import { Card, Page } from "../../components/ui/Card.tsx";
+import { LoadingRow } from "../../components/ui/Loader.tsx";
 import { CheckRow, Field, Input, Textarea } from "../../components/ui/Field.tsx";
 import { getParty, updateParty } from "../../data/index.ts";
 import { usePartyList } from "../../hooks/useLive.ts";
@@ -14,7 +15,7 @@ export function PartyEditPage() {
   const navigate = useNavigate();
   const party = useLiveQuery(() => getParty(id), [id]);
 
-  if (party === undefined) return <Page title="Edit party"><Card><p className="text-sm text-stone-500">Loading…</p></Card></Page>;
+  if (party === undefined) return <Page title="Edit party"><LoadingRow /></Page>;
   if (!party) return <Page title="Edit party"><Card><p className="text-sm text-stone-500">Party not found.</p></Card></Page>;
 
   return (

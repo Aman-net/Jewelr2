@@ -13,6 +13,7 @@ import { NewEntryPicker } from "../features/vouchers/NewEntry.tsx";
 import { OpeningForm } from "../features/vouchers/OpeningForm.tsx";
 import { SalePurchaseForm } from "../features/vouchers/SalePurchaseForm.tsx";
 import { SettlementForm } from "../features/vouchers/SettlementForm.tsx";
+import { Spinner } from "../components/ui/Loader.tsx";
 
 /** Rarely-used screens split out so first paint stays light. */
 const BackupPage = lazy(() => import("../features/backup/Backup.tsx").then((m) => ({ default: m.BackupPage })));
@@ -22,7 +23,12 @@ const DetailPage = lazy(() => import("../features/vouchers/VoucherDetail.tsx").t
 
 function deferred(node: ReactNode) {
   return (
-    <Suspense fallback={<div className="mx-auto w-full max-w-xl px-4 pt-10 text-center text-sm text-stone-500">Loading…</div>}>
+    <Suspense fallback={
+      <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-3 px-4 pt-16 text-sm text-stone-500">
+        <Spinner className="h-8 w-8" />
+        Loading…
+      </div>
+    }>
       {node}
     </Suspense>
   );
