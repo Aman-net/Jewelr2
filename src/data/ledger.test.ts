@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { clearDb, createTestDb } from "./db.ts";
 import type { JewelrDb } from "./db.ts";
+import { uuid } from "../lib/uuid.ts";
 import { getAllBalances, getBalances, getBalancesAsOf, getLedger, rebuildLedger, storedEntriesByVoucher } from "./ledger.ts";
 import { createParty } from "./parties.ts";
 import { postVoucher, reverseVoucher } from "./vouchers.ts";
@@ -9,7 +10,7 @@ import { postVoucher, reverseVoucher } from "./vouchers.ts";
 let tdb: JewelrDb;
 let partyId: string;
 beforeEach(async () => {
-  tdb = createTestDb(`test-ledger-${crypto.randomUUID()}`);
+  tdb = createTestDb(`test-ledger-${uuid()}`);
   await clearDb(tdb);
   partyId = (await createParty({ name: "P1", isCustomer: true, isSupplier: false }, tdb)).party.id;
 });

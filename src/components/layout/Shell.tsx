@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { Link, NavLink, Outlet, useLocation } from "react-router";
+import { Link, NavLink, Outlet } from "react-router";
 import { Home, Plus, Settings, Users, Wallet } from "lucide-react";
 import { getLastBackupAt } from "../../data/index.ts";
 import { en } from "../../i18n/en.ts";
@@ -28,14 +28,12 @@ function BackupBanner() {
 const tabs = [
   { to: "/", label: en.nav.home, Icon: Home, end: true },
   { to: "/parties", label: en.nav.parties, Icon: Users, end: false },
-  { to: "/vouchers/new/sale", label: en.nav.add, Icon: Plus, end: false },
+  { to: "/vouchers/new", label: en.nav.add, Icon: Plus, end: false },
   { to: "/summary", label: en.nav.summary, Icon: Wallet, end: false },
   { to: "/settings/backup", label: en.nav.settings, Icon: Settings, end: false },
 ];
 
 export function Shell() {
-  const location = useLocation();
-  const onNew = location.pathname.startsWith("/vouchers/new");
   return (
     <div className="app-shell min-h-svh bg-stone-100">
       <header className="sticky top-0 z-10 border-b border-stone-200 bg-white/95 backdrop-blur">
@@ -58,7 +56,7 @@ export function Shell() {
               className={({ isActive }) =>
                 cn(
                   "flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium",
-                  isActive || (to === "/vouchers/new/sale" && onNew) ? "text-amber-800" : "text-stone-500",
+                  isActive ? "text-amber-800" : "text-stone-500",
                 )
               }
             >

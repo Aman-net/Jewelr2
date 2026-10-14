@@ -119,7 +119,7 @@ export function VoucherDetailPage() {
   return (
     <Page
       title={`${v.type.charAt(0)}${v.type.slice(1).toLowerCase()}`}
-      action={<Link to={`/parties/${v.partyId}/ledger`} className="text-sm font-medium text-amber-800">Ledger ›</Link>}
+      action={<Link to={`/parties/${v.partyId}`} className="text-sm font-medium text-amber-800">Khata ›</Link>}
     >
       <Card>
         <div className="mb-1 text-sm text-stone-500">{v.businessDate}{v.referenceNumber ? ` · Ref ${v.referenceNumber}` : ""}</div>

@@ -57,3 +57,19 @@ export function todayLocal(): string {
 export function daysSince(iso: string): number {
   return (Date.now() - new Date(iso).getTime()) / 86_400_000;
 }
+
+/** Khata-style day header: Today / Yesterday / 12 Jan 2026. */
+export function dayLabel(yyyyMmDd: string): string {
+  const today = todayLocal();
+  if (yyyyMmDd === today) return "Today";
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  const yesterday = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;
+  if (yyyyMmDd === yesterday) return "Yesterday";
+  const [yy, mm, dd] = yyyyMmDd.split("-").map(Number);
+  return new Date(yy ?? 0, (mm ?? 1) - 1, dd ?? 1).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}

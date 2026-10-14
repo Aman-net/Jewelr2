@@ -1,5 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useRef, useState } from "react";
+import { Link } from "react-router";
 import { Button } from "../../components/ui/Button.tsx";
 import { Card, Page } from "../../components/ui/Card.tsx";
 import { CheckRow } from "../../components/ui/Field.tsx";
@@ -133,6 +134,11 @@ export function BackupPage() {
             </Button>
           </div>
         )}
+      </Card>
+      <Card>
+        <div className="mb-1 text-sm font-medium text-stone-900">{en.item.manage}</div>
+        <div className="mb-2 text-sm text-stone-500">Control the exact spelling of every pickable item.</div>
+        <Link to="/settings/items"><Button variant="secondary" full>Open item master</Button></Link>
       </Card>
       {status ? <div className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">{status}</div> : null}
       {error ? <div className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-800">{error}</div> : null}

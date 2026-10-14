@@ -16,6 +16,8 @@ import type {
   VoucherType,
 } from "../domain/index.ts";
 import type { Table } from "dexie";
+import { uuid } from "../lib/uuid.ts";
+import { recordCategoryUse } from "./categories.ts";
 import { SHOP_ID, db } from "./db.ts";
 import type {
   ConversionRow,
@@ -140,7 +142,7 @@ async function addVoucherParts(
   if (voucher.settlement) {
     const s = voucher.settlement;
     const row: SettlementRow = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       voucherId: voucher.id,
       cashPaise: s.cashPaise,
       goldPhysicalMg: s.goldPhysicalMg,
@@ -156,7 +158,7 @@ async function addVoucherParts(
   if (voucher.conversion) {
     const c = voucher.conversion;
     const row: ConversionRow = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       voucherId: voucher.id,
       direction: c.direction,
       metalType: c.metalType,
@@ -169,7 +171,7 @@ async function addVoucherParts(
   }
   if (voucher.opening) {
     const row: ManualDeltaRow = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       voucherId: voucher.id,
       kind: "OPENING",
       ...voucher.opening,
@@ -178,7 +180,7 @@ async function addVoucherParts(
   }
   if (voucher.adjustment) {
     const row: ManualDeltaRow = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       voucherId: voucher.id,
       kind: "ADJUSTMENT",
       ...voucher.adjustment,
@@ -211,7 +213,15 @@ function writeTables(dbx: JewelrDb): Table[] {
     dbx.conversions,
     dbx.manual_deltas,
     dbx.ledger_entries,
+    dbx.app_settings,
   ];
+}
+
+/** Remember used item names for the picker. Runs inside the posting transaction. */
+async function rememberCategories(dbx: JewelrDb, voucher: Voucher): Promise<void> {
+  for (const l of voucher.lines) {
+    await recordCategoryUse(l.metalType, l.categoryName, dbx);
+  }
 }
 
 /**
@@ -221,7 +231,7 @@ function writeTables(dbx: JewelrDb): Table[] {
  * no-op returning the stored voucher.
  */
 export async function postVoucher(input: PostVoucherInput, dbx: JewelrDb = db): Promise<PostedVoucher> {
-  const id = input.id ?? crypto.randomUUID();
+  const id = input.id ?? uuid();
   const createdAt = input.createdAt ?? nowIso();
   const domainInput: VoucherInput = {
     id,
@@ -250,6 +260,7 @@ export async function postVoucher(input: PostVoucherInput, dbx: JewelrDb = db): 
       return;
     }
     await addVoucherParts(dbx, voucher, entry);
+    await rememberCategories(dbx, voucher);
   });
 
   if (duplicate) {
@@ -285,7 +296,7 @@ export async function reverseVoucher(
   const origEntry = await originalDeltas(dbx, originalId);
 
   const { voucher, deltas } = buildReversal({
-    reversalId: options.reversalId ?? crypto.randomUUID(),
+    reversalId: options.reversalId ?? uuid(),
     shopId: SHOP_ID,
     originalVoucherId: originalId,
     originalPartyId: original.partyId,
@@ -327,7 +338,7 @@ export async function replaceVoucher(
 
   const stamp = options.createdAt ?? nowIso();
   const { voucher: revVoucher, deltas: revDeltas } = buildReversal({
-    reversalId: options.reversalId ?? crypto.randomUUID(),
+    reversalId: options.reversalId ?? uuid(),
     shopId: SHOP_ID,
     originalVoucherId: originalId,
     originalPartyId: original.partyId,
@@ -342,7 +353,7 @@ export async function replaceVoucher(
   });
   const revEntry = entryFromDeltas(revVoucher, revDeltas);
 
-  const repId = replacement.id ?? crypto.randomUUID();
+  const repId = replacement.id ?? uuid();
   const repVoucher = buildVoucher({
     id: repId,
     shopId: SHOP_ID,
@@ -363,6 +374,7 @@ export async function replaceVoucher(
   await dbx.transaction("rw", writeTables(dbx), async () => {
     await addVoucherParts(dbx, revVoucher, revEntry);
     await addVoucherParts(dbx, repVoucher, repEntry);
+    await rememberCategories(dbx, repVoucher);
   });
   return {
     reversal: { voucher: revVoucher, entry: revEntry, duplicate: false },

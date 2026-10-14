@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { clearDb, createTestDb } from "./db.ts";
 import type { JewelrDb } from "./db.ts";
+import { uuid } from "../lib/uuid.ts";
 import { createParty } from "./parties.ts";
 import {
   getVoucher,
@@ -13,7 +14,7 @@ import {
 let tdb: JewelrDb;
 let partyId: string;
 beforeEach(async () => {
-  tdb = createTestDb(`test-vouchers-${crypto.randomUUID()}`);
+  tdb = createTestDb(`test-vouchers-${uuid()}`);
   await clearDb(tdb);
   partyId = (await createParty({ name: "P1", isCustomer: true, isSupplier: true }, tdb)).party.id;
 });
@@ -110,7 +111,7 @@ describe("postVoucher", () => {
   });
 
   it("is idempotent: reposting an id is a no-op returning the stored voucher", async () => {
-    const id = crypto.randomUUID();
+    const id = uuid();
     const first = await postVoucher({ ...SALE_OPEN, id, partyId }, tdb);
     expect(first.duplicate).toBe(false);
     const second = await postVoucher({ ...SALE_OPEN, id, partyId }, tdb);
@@ -150,7 +151,7 @@ describe("postVoucher", () => {
   });
 
   it("is atomic: a mid-write failure leaves no partial rows", async () => {
-    const id = crypto.randomUUID();
+    const id = uuid();
     // Collide with the line id this post would write, forcing bulkAdd to fail mid-transaction.
     await tdb.voucher_lines.add({
       id: `${id}#L0`,

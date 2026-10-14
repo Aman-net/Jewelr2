@@ -60,6 +60,18 @@ export const en = {
     perKg: "₹/kg",
     perGram: "₹/g",
   },
+  item: {
+    label: "Item",
+    pick: "Pick item…",
+    search: "Search items…",
+    recent: "Recent",
+    presets: "Standard",
+    custom: "Used before",
+    yours: "Your items",
+    manage: "Manage items",
+    historyNote: "Renaming or deleting changes the list only — already-posted vouchers keep their original item names.",
+  },
+  more: "More details",
   common: { save: "Save", cancel: "Cancel", today: "Today", all: "All", from: "From", to: "To", type: "Type" },
 } as const;
 

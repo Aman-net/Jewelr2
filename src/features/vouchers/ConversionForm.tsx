@@ -2,14 +2,18 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { Button } from "../../components/ui/Button.tsx";
+import { Steps } from "../../components/ui/Bits.tsx";
 import { Card, Page } from "../../components/ui/Card.tsx";
 import { Field, Input, Select, Textarea } from "../../components/ui/Field.tsx";
+import { Segmented } from "../../components/ui/Segmented.tsx";
+import { SuccessView } from "../../components/ui/Success.tsx";
 import { getLastRate, postVoucher, setLastRate } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
-import type { ConversionDirection, MetalType, Voucher } from "../../domain/index.ts";
+import type { BalanceDelta, ConversionDirection, MetalType, Voucher } from "../../domain/index.ts";
 import { usePartyList } from "../../hooks/useLive.ts";
 import { en } from "../../i18n/en.ts";
-import { formatINR, parseGramsToMg, parseRupeesToPaise, todayLocal } from "../../lib/format.ts";
+import { formatGram, formatINR, parseGramsToMg, parseRupeesToPaise, todayLocal } from "../../lib/format.ts";
+import { uuid } from "../../lib/uuid.ts";
 import { PartyPicker } from "./fields.tsx";
 import { Review } from "./Review.tsx";
 
@@ -28,8 +32,9 @@ export function ConversionForm() {
   const location = useLocation();
   const [params] = useSearchParams();
   const state = (location.state as { correctedFrom?: string; prefill?: Partial<Form> } | null) ?? {};
-  const [voucherId] = useState(() => crypto.randomUUID());
+  const [voucherId] = useState(() => uuid());
   const [preview, setPreview] = useState<Voucher | null>(null);
+  const [posted, setPosted] = useState<{ deltas: BalanceDelta; partyId: string } | null>(null);
   const [error, setError] = useState("");
   const [posting, setPosting] = useState(false);
   const [lastRate, setLastRateHint] = useState<{ amountPaise: number } | undefined>();
@@ -48,6 +53,7 @@ export function ConversionForm() {
   });
   const partyId = watch("partyId");
   const metal = watch("metal");
+  const direction = watch("direction");
   const partyName = (partyList ?? []).find((p) => p.id === partyId)?.name ?? "";
 
   useEffect(() => {
@@ -103,7 +109,7 @@ export function ConversionForm() {
         },
       });
       await setLastRate(c.metalType, { amountPaise: c.rateAmountPaise, unit: c.rateUnit });
-      navigate(`/vouchers/${voucherId}`);
+      setPosted({ deltas: voucherDeltas(preview), partyId: preview.partyId });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not post");
     } finally {
@@ -111,10 +117,31 @@ export function ConversionForm() {
     }
   };
 
+  if (posted) {
+    const d = posted.deltas;
+    return (
+      <Page title="Fix rate">
+        <Card>
+          <SuccessView
+            title="Rate fixed"
+            summary={
+              <div className="rounded-xl bg-stone-50 p-3 text-sm text-stone-700">
+                {partyName} · {formatGram(Math.abs(d.goldFineMg !== 0 ? d.goldFineMg : d.silverFineMg))} ⇄ {formatINR(Math.abs(d.cashPaise))}
+              </div>
+            }
+            primary={{ label: "View khata", onClick: () => navigate(`/parties/${posted.partyId}`) }}
+            secondary={{ label: "New entry", onClick: () => navigate("/vouchers/new") }}
+          />
+        </Card>
+      </Page>
+    );
+  }
+
   if (preview) {
     const d = voucherDeltas(preview);
     return (
       <Page title={en.voucher.review}>
+        <Steps current={2} labels={["Party", "Rate", "Review"]} />
         <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
           partyName={partyName} posting={posting} error={error}
           onBack={() => setPreview(null)} onConfirm={onConfirm} />
@@ -123,31 +150,32 @@ export function ConversionForm() {
   }
 
   return (
-    <Page title={en.voucher.conversion}>
+    <Page title="Fix rate">
+      <Steps current={1} labels={["Party", "Rate", "Review"]} />
       <form className="flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
         <Card>
           <div className="flex flex-col gap-3">
             <PartyPicker value={partyId} onChange={(id) => setValue("partyId", id)} />
             <div className="grid grid-cols-2 gap-2">
               <Field label={en.voucher.date}><Input type="date" {...register("businessDate", { required: true })} max={todayLocal()} /></Field>
-              <Field label="Direction">
-                <Select {...register("direction")}>
-                  <option value="METAL_TO_CASH">Metal → cash</option>
-                  <option value="CASH_TO_METAL">Cash → metal</option>
-                </Select>
-              </Field>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
               <Field label="Metal">
                 <Select {...register("metal")}>
                   <option value="GOLD">Gold</option>
                   <option value="SILVER">Silver</option>
                 </Select>
               </Field>
-              <Field label="Fine weight" unit={en.units.g}>
-                <Input {...register("fineG")} inputMode="decimal" placeholder="0.000" />
-              </Field>
             </div>
+            <Field label="Direction">
+              <Segmented
+                options={["METAL_TO_CASH", "CASH_TO_METAL"] as const}
+                value={direction}
+                onChange={(d) => setValue("direction", d)}
+                labels={{ METAL_TO_CASH: "Metal → cash", CASH_TO_METAL: "Cash → metal" }}
+              />
+            </Field>
+            <Field label="Fine weight" unit={en.units.g}>
+              <Input {...register("fineG")} inputMode="decimal" placeholder="0.000" />
+            </Field>
             <Field
               label={en.voucher.rate}
               unit={metal === "GOLD" ? en.units.per10g : en.units.perKg}

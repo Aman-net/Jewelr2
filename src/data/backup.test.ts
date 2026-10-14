@@ -11,13 +11,14 @@ import {
 } from "./backup.ts";
 import { clearDb, createTestDb } from "./db.ts";
 import type { JewelrDb } from "./db.ts";
+import { uuid } from "../lib/uuid.ts";
 import { getAllBalances } from "./ledger.ts";
 import { createParty } from "./parties.ts";
 import { postVoucher } from "./vouchers.ts";
 
 let tdb: JewelrDb;
 beforeEach(async () => {
-  tdb = createTestDb(`test-backup-${crypto.randomUUID()}`);
+  tdb = createTestDb(`test-backup-${uuid()}`);
   await clearDb(tdb);
 });
 
@@ -68,7 +69,7 @@ describe("backup round trip", () => {
     expect(preview.counts.vouchers).toBe(3);
     expect(preview.partyNames.sort()).toEqual(["P1", "P2"]);
 
-    const fresh = createTestDb(`test-restore-${crypto.randomUUID()}`);
+    const fresh = createTestDb(`test-restore-${uuid()}`);
     const counts = await restoreIntoEmpty(JSON.parse(JSON.stringify(backup)), fresh);
     expect(counts.vouchers).toBe(3);
     expect(await getAllBalances(fresh)).toEqual(await getAllBalances(tdb));
@@ -95,7 +96,7 @@ describe("backup round trip", () => {
     const before = await getAllBalances(tdb);
     const backup = await exportBackup(tdb);
 
-    const other = createTestDb(`test-other-${crypto.randomUUID()}`);
+    const other = createTestDb(`test-other-${uuid()}`);
     const { party } = await createParty({ name: "Other", isCustomer: true, isSupplier: false }, other);
     await postVoucher(
       { type: "PAYMENT", partyId: party.id, businessDate: "2026-02-01", settlement: { cashPaise: 999 } },

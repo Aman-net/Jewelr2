@@ -49,3 +49,5 @@ export {
 export type { BackupCounts, BackupFile } from "./backup.ts";
 export { getLastRate, setLastRate } from "./settings.ts";
 export type { LastRate } from "./settings.ts";
+export { PRESET_CATEGORIES, addCustom, deleteCustom, getCategorySuggestions, getCustoms, recordCategoryUse, renameCustom } from "./categories.ts";
+export type { CategorySuggestions } from "./categories.ts";

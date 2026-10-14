@@ -1,5 +1,6 @@
 import { partySchema } from "../domain/schemas.ts";
 import type { Party } from "../domain/types.ts";
+import { uuid } from "../lib/uuid.ts";
 import { SHOP_ID, clearDb, createTestDb, db } from "./db.ts";
 import type { JewelrDb } from "./db.ts";
 
@@ -37,7 +38,7 @@ export async function createParty(
 ): Promise<{ party: Party; duplicateName: boolean }> {
   const stamp = nowIso();
   const party: Party = {
-    id: crypto.randomUUID(),
+    id: uuid(),
     shopId: SHOP_ID,
     active: true,
     createdAt: stamp,
@@ -88,7 +89,7 @@ export async function updateParty(id: string, patch: UpdatePartyPatch, dbx: Jewe
   await dbx.transaction("rw", [dbx.parties, dbx.audit_events], async () => {
     await dbx.parties.put(after);
     await dbx.audit_events.add({
-      id: crypto.randomUUID(),
+      id: uuid(),
       entityType: "party",
       entityId: id,
       action: "update",
