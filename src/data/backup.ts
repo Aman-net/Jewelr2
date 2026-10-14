@@ -104,7 +104,9 @@ export function previewBackup(json: unknown): { counts: BackupCounts; partyNames
   const backup = parseBackup(json);
   return {
     counts: countsOf(backup.tables),
-    partyNames: (backup.tables.parties as PartyRow[]).map((p) => p.name),
+    partyNames: (backup.tables.parties as { name?: unknown }[]).map((p) =>
+      typeof p.name === "string" && p.name ? p.name : "?",
+    ),
   };
 }
 

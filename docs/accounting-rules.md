@@ -42,6 +42,13 @@ labour ₹  = round(physicalMg * labourPaisePerGram / 1000)
 Q7 (returns) and Q9 (payment modes) need no calculation rule in v0.1:
 returns = reversal + replacement/`ADJUSTMENT`; payment mode is a tag only.
 
+## Data-layer integrity rule (no brief rule, enforced in code)
+
+One **live** opening balance per party (`assertSingleOpening` in
+`data/vouchers.ts`). It may be posted at creation or later with a backdated
+as-of date, but a second opening is rejected — corrections go through
+reversal + replacement. Reversed openings don't count.
+
 ## Agent assumption (no brief rule)
 
 `ADJUSTMENT` posts an explicit manual `adjustment` delta. The brief lists the

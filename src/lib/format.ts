@@ -26,6 +26,11 @@ export function formatTunch(scaled: number): string {
   return `${new Decimal(scaled).div(100).toString()}${en.units.percent}`;
 }
 
+/** Stored deal rate: "₹1,00,000 per 10 g" / "₹1,00,000 per kg". */
+export function formatRate(ratePaise: number, unit: "GOLD_PER_10G" | "SILVER_PER_KG"): string {
+  return `${formatINR(ratePaise)} per ${unit === "GOLD_PER_10G" ? "10 g" : "kg"}`;
+}
+
 /** Parse user-typed grams ("12.345") → integer mg. Throws on invalid. */
 export function parseGramsToMg(raw: string): number {
   const v = new Decimal(raw.trim());
@@ -58,8 +63,12 @@ export function daysSince(iso: string): number {
   return (Date.now() - new Date(iso).getTime()) / 86_400_000;
 }
 
-/** Khata-style day header: Today / Yesterday / 12 Jan 2026. */
-export function dayLabel(yyyyMmDd: string): string {
+/** Recording time for an ISO timestamp: "1:35 pm". */
+export function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+}
+
+/** Khata-style day header: Today / Yesterday / 12 Jan 2026. */export function dayLabel(yyyyMmDd: string): string {
   const today = todayLocal();
   if (yyyyMmDd === today) return "Today";
   const y = new Date();

@@ -110,6 +110,42 @@ describe("postVoucher", () => {
     expect(adj.entry.cashDeltaPaise).toBe(-50);
   });
 
+  it("allows only one live opening per party, but a reversed one can be replaced", async () => {
+    const first = await postVoucher(
+      {
+        type: "OPENING",
+        partyId,
+        businessDate: "2026-01-01",
+        opening: { cashPaise: 100_000, goldFineMg: 0, silverFineMg: 0 },
+      },
+      tdb,
+    );
+    await expect(
+      postVoucher(
+        {
+          type: "OPENING",
+          partyId,
+          businessDate: "2026-01-02",
+          opening: { cashPaise: 50_000, goldFineMg: 0, silverFineMg: 0 },
+        },
+        tdb,
+      ),
+    ).rejects.toThrow(/already has an opening/);
+    expect(await tdb.vouchers.where("partyId").equals(partyId).count()).toBe(1);
+
+    await reverseVoucher(first.voucher.id, "wrong amount", {}, tdb);
+    const second = await postVoucher(
+      {
+        type: "OPENING",
+        partyId,
+        businessDate: "2026-01-01",
+        opening: { cashPaise: 120_000, goldFineMg: 0, silverFineMg: 0 },
+      },
+      tdb,
+    );
+    expect(second.entry.cashDeltaPaise).toBe(120_000);
+  });
+
   it("is idempotent: reposting an id is a no-op returning the stored voucher", async () => {
     const id = uuid();
     const first = await postVoucher({ ...SALE_OPEN, id, partyId }, tdb);

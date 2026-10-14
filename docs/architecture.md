@@ -30,7 +30,7 @@ src/
   components/layout/ # Shell (header, backup banner, bottom nav)
   i18n/en.ts         # label dictionary (English; Hindi later)
   lib/format.ts      # INR (en-IN), gram, tunch, exact input parsing
-  routes/router.tsx  # HashRouter (zero-config static hosting + PWA scope)
+  routes/router.tsx  # createHashRouter (data router: blocking APIs work; hash = zero-config hosting)
 docs/
   accounting-rules.md requirements.md architecture.md known-limitations.md
   golden/scenarios.json   # ILLUSTRATIVE only until owner approves
@@ -55,6 +55,13 @@ ref#, notes) so the primary path stays short. Item names come from a master
 case-insensitive) — the owner fixes spellings once via rename instead of
 retyping them on every bill. Rename/delete touch the master only; posted
 history keeps its original strings.
+
+Navigation is app-like, not site-like: the bottom nav shows only on hub
+screens (Home, Parties, khata, Summary, Settings); focused flows
+(entry wizards, voucher detail, edit, item master) go full-screen with an
+explicit back button that falls back safely on deep links. Dirty money forms
+are guarded by `useLeaveGuard` — system back or stray taps surface a
+Leave/Stay sheet instead of silently discarding the entry.
 
 Storage is Postgres-shaped: one flat table per entity, voucher lines in
 `voucher_lines`, settlement/conversion/manual-delta parts in their own tables

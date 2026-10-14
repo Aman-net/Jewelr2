@@ -3,12 +3,13 @@ import { useFieldArray, useForm } from "react-hook-form";
 import type { UseFormRegister, UseFormSetValue, UseFormWatch } from "react-hook-form";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { Button } from "../../components/ui/Button.tsx";
-import { Steps } from "../../components/ui/Bits.tsx";
-import { Card, Page } from "../../components/ui/Card.tsx";
-import { Field, Input, Textarea } from "../../components/ui/Field.tsx";
+import { Chip } from "../../components/ui/Bits.tsx";
+import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
+import { AmountInput, Field, Input, Textarea } from "../../components/ui/Field.tsx";
+import { FlowHeader, StickyCta, type FlowTone } from "../../components/ui/Flow.tsx";
+import { useLeaveGuard } from "../../hooks/useLeaveGuard.tsx";
 import { Segmented } from "../../components/ui/Segmented.tsx";
 import { SuccessView } from "../../components/ui/Success.tsx";
-import { Chip } from "../../components/ui/Bits.tsx";
 import { getLastRate, postVoucher, setLastRate } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import { fineToCash, GOLD_QUOTE_MG, SILVER_QUOTE_MG } from "../../domain/numeric/metalValue.ts";
@@ -97,6 +98,8 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
   const partyId = watch("partyId");
   const partyList = usePartyList();
   const partyName = (partyList ?? []).find((p) => p.id === partyId)?.name ?? "";
+  const backTo = prefill?.partyId ?? params.get("party") ? `/parties/${prefill?.partyId ?? params.get("party")}` : "/vouchers/new";
+  const { prompt } = useLeaveGuard(step >= 1 && !posted);
 
   useEffect(() => {
     void Promise.all([getLastRate("GOLD"), getLastRate("SILVER")]).then(([g, s]) => {
@@ -196,6 +199,8 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
   };
 
   const title = kind === "SALE" ? "Sell goods" : "Buy goods";
+  const tone: FlowTone = kind === "SALE" ? "amber" : "sky";
+  const shell = "mx-auto w-full max-w-xl px-4 pb-6 pt-4";
 
   if (posted) {
     const d = posted.deltas;
@@ -205,10 +210,9 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
           <SuccessView
             title={kind === "SALE" ? "Sale recorded" : "Purchase recorded"}
             summary={
-              <div className="rounded-xl bg-stone-50 p-3 text-sm text-stone-700">
-                {partyName} · {d.cashPaise !== 0 && <>{formatINR(d.cashPaise)} </>}
-                {d.goldFineMg !== 0 && <>gold {formatGram(d.goldFineMg)} </>}
-                {d.silverFineMg !== 0 && <>silver {formatGram(d.silverFineMg)}</>}
+              <div className="flex flex-col gap-2">
+                <div className="text-sm text-stone-500">{partyName}</div>
+                <BalanceGrid cashPaise={d.cashPaise} goldFineMg={d.goldFineMg} silverFineMg={d.silverFineMg} />
               </div>
             }
             primary={{ label: "View khata", onClick: () => navigate(`/parties/${posted.partyId}`) }}
@@ -222,18 +226,30 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
   if (step === 2 && preview) {
     const d = voucherDeltas(preview);
     return (
-      <Page title={en.voucher.review}>
-        <Steps current={2} labels={["Party", "Goods", "Review"]} />
-        <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
-          partyName={partyName} posting={posting} error={reviewError}
-          onBack={() => { setPreview(null); setStep(1); }} onConfirm={onConfirm} />
-      </Page>
+      <div className={shell}>
+        <div className="flex flex-col gap-3">
+          <FlowHeader tone={tone} title="Review entry" context={partyName} current={2} labels={["Party", "Goods", "Review"]} />
+          <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
+            partyName={partyName} posting={posting} error={reviewError}
+            onBack={() => { setPreview(null); setStep(1); }} onConfirm={onConfirm} />
+          {prompt}
+        </div>
+      </div>
     );
   }
 
   return (
-    <Page title={title}>
-      <Steps current={step} labels={["Party", "Goods", "Review"]} />
+    <div className={shell}>
+      <div className="flex flex-col gap-3">
+        <FlowHeader
+          tone={tone}
+          title={title}
+          backTo={backTo}
+          context={step === 1 ? (kind === "SALE" ? `Giving goods to ${partyName || "…"}` : `Taking goods from ${partyName || "…"}`) : undefined}
+          onChangeContext={step === 1 ? () => setStep(0) : undefined}
+          current={step}
+          labels={["Party", "Goods", "Review"]}
+        />
       {step === 0 && (
         <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void nextFromParty(); }}>
           <Card>
@@ -251,15 +267,11 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
             </div>
           </Card>
           {reviewError ? <p className="text-sm font-medium text-red-700">{reviewError}</p> : null}
-          <Button type="submit">Continue →</Button>
+          <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">Continue →</Button></StickyCta>
         </form>
       )}
       {step === 1 && (
         <form className="flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
-          <div className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            {kind === "SALE" ? "Giving goods to" : "Taking goods from"} <b>{partyName || "…"}</b>
-            <button type="button" className="ml-2 underline" onClick={() => setStep(0)}>change</button>
-          </div>
           {fields.map((f, i) => (
             <LineCard
               key={f.id}
@@ -282,10 +294,12 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
             </div>
           </details>
           {reviewError ? <p className="text-sm font-medium text-red-700">{reviewError}</p> : null}
-          <Button type="submit">{en.voucher.review} →</Button>
+          <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">{en.voucher.review} →</Button></StickyCta>
         </form>
       )}
-    </Page>
+      {prompt}
+    </div>
+  </div>
   );
 }
 
@@ -314,11 +328,14 @@ function LineCard({ index, kind, register, watch, setValue, lastRate, onRemove }
           options={["GOLD", "SILVER"] as const}
           value={metal}
           onChange={(m) => setValue(`lines.${index}.metal`, m)}
-          labels={{ GOLD: "Gold", SILVER: "Silver" }}
+          labels={{
+            GOLD: <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" /> Gold</span>,
+            SILVER: <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-400" /> Silver</span>,
+          }}
         />
         <CategoryField metal={metal} value={watch(`lines.${index}.category`)} onPick={(name) => setValue(`lines.${index}.category`, name)} />
         <Field label="Weight" unit={en.units.g}>
-          <Input {...register(`lines.${index}.physicalG`)} inputMode="decimal" placeholder="0.000" />
+          <AmountInput prefix="g" {...register(`lines.${index}.physicalG`)} inputMode="decimal" placeholder="0.000" />
         </Field>
         <Field label="Billing tunch" unit={en.units.percent}>
           <div className="flex flex-wrap gap-1.5">
@@ -342,7 +359,8 @@ function LineCard({ index, kind, register, watch, setValue, lastRate, onRemove }
             unit={metal === "GOLD" ? en.units.per10g : en.units.perKg}
             hint={lastRate ? `${en.voucher.lastUsedRate}: ${formatINR(lastRate.amountPaise)} — tap field to reuse` : undefined}
           >
-            <Input
+            <AmountInput
+              prefix="₹"
               {...register(`lines.${index}.rate`)}
               inputMode="decimal"
               placeholder={lastRate ? formatINR(lastRate.amountPaise) : "0.00"}
@@ -372,7 +390,7 @@ function LineCard({ index, kind, register, watch, setValue, lastRate, onRemove }
             </details>
           </div>
         </div>
-        {hint ? <div className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-sm font-medium text-emerald-800">{hint}</div> : null}
+        {hint ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-900">{hint}</div> : null}
       </div>
     </Card>
   );

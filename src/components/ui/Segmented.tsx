@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { cn } from "../../lib/cn.ts";
 
 /** iOS-style segmented control for 2–3 exclusive options. Replaces dropdowns. */
@@ -5,7 +6,7 @@ export function Segmented<T extends string>({ options, value, onChange, labels }
   options: readonly T[];
   value: T;
   onChange: (v: T) => void;
-  labels?: Partial<Record<T, string>>;
+  labels?: Partial<Record<T, ReactNode>>;
 }) {
   return (
     <div className="grid auto-cols-fr grid-flow-col gap-1 rounded-xl bg-stone-200 p-1">

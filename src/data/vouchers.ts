@@ -225,6 +225,25 @@ async function rememberCategories(dbx: JewelrDb, voucher: Voucher): Promise<void
 }
 
 /**
+ * Opening balances seed the paper khata exactly once per party — at creation
+ * or later with a backdated as-of date. A second live opening is never
+ * legitimate (use reversal/replacement or adjustments instead). Reversed
+ * openings don't count, so a wrong opening can still be corrected.
+ */
+export async function assertSingleOpening(
+  dbx: JewelrDb,
+  partyId: string,
+  exceptVoucherId?: string,
+): Promise<void> {
+  const rows = await dbx.vouchers.where("partyId").equals(partyId).toArray();
+  for (const o of rows.filter((r) => r.type === "OPENING" && r.id !== exceptVoucherId)) {
+    const reversed = await dbx.vouchers.where("reversesVoucherId").equals(o.id).first();
+    if (!reversed) {
+      throw new Error("This party already has an opening balance. Reverse it first to correct it.");
+    }
+  }
+}
+/**
  * Post a voucher atomically: voucher + lines + parts + ledger entry, all or nothing.
  * Everything is validated and computed BEFORE the transaction opens, so a
  * validation failure writes nothing. Idempotent: an already-existing id is a
@@ -250,6 +269,9 @@ export async function postVoucher(input: PostVoucherInput, dbx: JewelrDb = db): 
   };
   // Pure validation + snapshot computation first — throws before any write.
   const voucher = buildVoucher(domainInput);
+  if (voucher.type === "OPENING") {
+    await assertSingleOpening(dbx, voucher.partyId);
+  }
   const entry = entryFromDeltas(voucher, voucherDeltas(voucher));
 
   let duplicate = false;
@@ -354,6 +376,9 @@ export async function replaceVoucher(
   const revEntry = entryFromDeltas(revVoucher, revDeltas);
 
   const repId = replacement.id ?? uuid();
+  if (replacement.type === "OPENING") {
+    await assertSingleOpening(dbx, replacement.partyId, originalId);
+  }
   const repVoucher = buildVoucher({
     id: repId,
     shopId: SHOP_ID,

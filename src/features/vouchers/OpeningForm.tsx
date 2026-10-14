@@ -2,16 +2,17 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useSearchParams } from "react-router";
 import { Button } from "../../components/ui/Button.tsx";
-import { Steps } from "../../components/ui/Bits.tsx";
-import { Card, Page } from "../../components/ui/Card.tsx";
-import { Field, Input, Textarea } from "../../components/ui/Field.tsx";
+import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
+import { AmountInput, Field, Input, Textarea } from "../../components/ui/Field.tsx";
+import { FlowHeader, StickyCta } from "../../components/ui/Flow.tsx";
+import { useLeaveGuard } from "../../hooks/useLeaveGuard.tsx";
 import { SuccessView } from "../../components/ui/Success.tsx";
 import { postVoucher } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import type { BalanceDelta, Voucher } from "../../domain/index.ts";
 import { usePartyList } from "../../hooks/useLive.ts";
 import { en } from "../../i18n/en.ts";
-import { formatGram, formatINR, parseGramsToMg, parseRupeesToPaise, todayLocal } from "../../lib/format.ts";
+import { parseGramsToMg, parseRupeesToPaise, todayLocal } from "../../lib/format.ts";
 import { uuid } from "../../lib/uuid.ts";
 import { PartyPicker } from "./fields.tsx";
 import { Review } from "./Review.tsx";
@@ -50,7 +51,7 @@ export function OpeningForm() {
   const [posting, setPosting] = useState(false);
   const partyList = usePartyList();
 
-  const { register, handleSubmit, setValue, watch } = useForm<Form>({
+  const { register, handleSubmit, setValue, watch, formState: { isDirty } } = useForm<Form>({
     defaultValues: {
       partyId: params.get("party") ?? "",
       businessDate: todayLocal(),
@@ -62,6 +63,8 @@ export function OpeningForm() {
   });
   const partyId = watch("partyId");
   const partyName = (partyList ?? []).find((p) => p.id === partyId)?.name ?? "";
+  const backTo = params.get("party") ? `/parties/${params.get("party")}` : "/vouchers/new";
+  const { prompt } = useLeaveGuard(isDirty && !preview && !posted);
 
   const onReview = handleSubmit((v) => {
     setError("");
@@ -119,8 +122,9 @@ export function OpeningForm() {
           <SuccessView
             title="Opening balance saved"
             summary={
-              <div className="rounded-xl bg-stone-50 p-3 text-sm text-stone-700">
-                {partyName} · {formatINR(d.cashPaise)}{d.goldFineMg !== 0 && <> · gold {formatGram(d.goldFineMg)}</>}{d.silverFineMg !== 0 && <> · silver {formatGram(d.silverFineMg)}</>}
+              <div className="flex flex-col gap-2">
+                <div className="text-sm text-stone-500">{partyName}</div>
+                <BalanceGrid cashPaise={d.cashPaise} goldFineMg={d.goldFineMg} silverFineMg={d.silverFineMg} />
               </div>
             }
             primary={{ label: "View khata", onClick: () => navigate(`/parties/${posted.partyId}`) }}
@@ -134,38 +138,49 @@ export function OpeningForm() {
   if (preview) {
     const d = voucherDeltas(preview);
     return (
-      <Page title={en.voucher.review}>
-        <Steps current={2} labels={["Party", "Balance", "Review"]} />
-        <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
-          partyName={partyName} posting={posting} error={error}
-          onBack={() => setPreview(null)} onConfirm={onConfirm} />
-      </Page>
+      <div className="mx-auto w-full max-w-xl px-4 pb-6 pt-4">
+        <div className="flex flex-col gap-3">
+          <FlowHeader tone="stone" title="Review entry" context={partyName} current={2} labels={["Party", "Balance", "Review"]} />
+          <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
+            partyName={partyName} posting={posting} error={error}
+            onBack={() => setPreview(null)} onConfirm={onConfirm} />
+          {prompt}
+        </div>
+      </div>
     );
   }
 
   return (
-    <Page title="Opening balance">
-      <Steps current={1} labels={["Party", "Balance", "Review"]} />
-      <form className="flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
-        <Card>
-          <div className="flex flex-col gap-3">
-            <PartyPicker value={partyId} onChange={(id) => setValue("partyId", id)} />
-            <Field label={en.voucher.date}><Input type="date" {...register("businessDate", { required: true })} max={todayLocal()} /></Field>
-            <Field label="Cash opening" unit={en.units.inr} hint="Use − for amounts you owe the party">
-              <Input {...register("cash")} inputMode="decimal" placeholder="0.00" />
-            </Field>
-            <Field label="Gold opening (fine)" unit={en.units.g} hint="Use − if you owe the party">
-              <Input {...register("goldG")} inputMode="decimal" placeholder="0.000" />
-            </Field>
-            <Field label="Silver opening (fine)" unit={en.units.g} hint="Use − if you owe the party">
-              <Input {...register("silverG")} inputMode="decimal" placeholder="0.000" />
-            </Field>
-            <Field label="Notes (optional)"><Textarea {...register("notes")} rows={2} /></Field>
-          </div>
-        </Card>
-        {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
-        <Button type="submit">{en.voucher.review} →</Button>
-      </form>
-    </Page>
+    <div className="mx-auto w-full max-w-xl px-4 pb-6 pt-4">
+      <div className="flex flex-col gap-3">
+        <FlowHeader tone="stone" title="Opening balance" backTo={backTo} context={partyName || undefined} current={1} labels={["Party", "Balance", "Review"]} />
+        <form className="flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
+          <Card>
+            <div className="flex flex-col gap-3">
+              <PartyPicker value={partyId} onChange={(id) => setValue("partyId", id)} />
+              <Field label={en.voucher.date}><Input type="date" {...register("businessDate", { required: true })} max={todayLocal()} /></Field>
+              <Field label="Cash opening" unit={en.units.inr} hint="Use − for amounts you owe the party">
+                <AmountInput prefix="₹" {...register("cash")} inputMode="decimal" placeholder="0.00" />
+              </Field>
+              <Field label="Gold opening (fine)" unit={en.units.g} hint="Use − if you owe the party">
+                <AmountInput prefix="g" {...register("goldG")} inputMode="decimal" placeholder="0.000" />
+              </Field>
+              <Field label="Silver opening (fine)" unit={en.units.g} hint="Use − if you owe the party">
+                <AmountInput prefix="g" {...register("silverG")} inputMode="decimal" placeholder="0.000" />
+              </Field>
+              <details>
+                <summary className="cursor-pointer text-sm font-medium text-stone-500">{en.more}</summary>
+                <div className="pt-2">
+                  <Field label="Notes (optional)"><Textarea {...register("notes")} rows={2} /></Field>
+                </div>
+              </details>
+            </div>
+          </Card>
+          {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
+          <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">{en.voucher.review} →</Button></StickyCta>
+        </form>
+        {prompt}
+      </div>
+    </div>
   );
 }

@@ -44,24 +44,34 @@ export function DuesHead({ cashPaise, goldFineMg, silverFineMg, size = "lg" }: {
   );
 }
 
-/** Compact one-line dues for rows: coloured amount + metal hints. */
+/** Compact dues for rows: coloured cash amount + metal pills. */
 export function DuesLine({ cashPaise, goldFineMg, silverFineMg }: {
   cashPaise: number;
   goldFineMg: number;
   silverFineMg: number;
 }) {
-  const parts: string[] = [];
-  if (goldFineMg !== 0) parts.push(`G ${formatGram(Math.abs(goldFineMg))}`);
-  if (silverFineMg !== 0) parts.push(`S ${formatGram(Math.abs(silverFineMg))}`);
   return (
-    <div className="text-right">
+    <div className="flex shrink-0 flex-col items-end gap-1">
       <div className={cn(
-        "text-sm font-semibold",
+        "text-sm font-bold",
         cashPaise === 0 ? "text-stone-400" : cashPaise > 0 ? "text-emerald-700" : "text-red-700",
       )}>
         {formatINR(cashPaise)}
       </div>
-      {parts.length > 0 && <div className="text-[11px] text-stone-500">{parts.join(" · ")}</div>}
+      {(goldFineMg !== 0 || silverFineMg !== 0) && (
+        <div className="flex gap-1">
+          {goldFineMg !== 0 && (
+            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-900">
+              {goldFineMg > 0 ? "+" : "−"}{formatGram(Math.abs(goldFineMg))}
+            </span>
+          )}
+          {silverFineMg !== 0 && (
+            <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[11px] font-bold text-slate-700">
+              {silverFineMg > 0 ? "+" : "−"}{formatGram(Math.abs(silverFineMg))}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

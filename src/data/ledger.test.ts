@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { clearDb, createTestDb } from "./db.ts";
 import type { JewelrDb } from "./db.ts";
 import { uuid } from "../lib/uuid.ts";
-import { getAllBalances, getBalances, getBalancesAsOf, getLedger, rebuildLedger, storedEntriesByVoucher } from "./ledger.ts";
+import { getAllBalances, getBalances, getBalancesAsOf, getEntriesInRange, getLedger, listActivity, rebuildLedger, storedEntriesByVoucher } from "./ledger.ts";
 import { createParty } from "./parties.ts";
 import { postVoucher, reverseVoucher } from "./vouchers.ts";
 
@@ -127,5 +127,24 @@ describe("ledger queries", () => {
       [partyId]: { cashPaise: -1_000, goldFineMg: 0, silverFineMg: 0 },
       [p2]: { cashPaise: 500, goldFineMg: 0, silverFineMg: 0 },
     });
+  });
+
+  it("reads entries in a date range, chronological", async () => {
+    await postVoucher({ type: "RECEIPT", partyId, businessDate: "2026-01-12", settlement: { cashPaise: 1_000 } }, tdb);
+    await postVoucher({ type: "PAYMENT", partyId, businessDate: "2026-01-08", settlement: { cashPaise: 500 } }, tdb);
+    await postVoucher({ type: "RECEIPT", partyId, businessDate: "2026-01-20", settlement: { cashPaise: 700 } }, tdb);
+    const rows = await getEntriesInRange("2026-01-08", "2026-01-12", tdb);
+    expect(rows.map((r) => r.businessDate)).toEqual(["2026-01-08", "2026-01-12"]);
+    expect(rows.reduce((n, r) => n + r.cashDeltaPaise, 0)).toBe(-500);
+  });
+
+  it("lists activity joined with deltas, newest first, filterable", async () => {
+    await postVoucher({ type: "RECEIPT", partyId, businessDate: "2026-01-12", settlement: { cashPaise: 1_000 } }, tdb);
+    await postVoucher({ type: "PAYMENT", partyId, businessDate: "2026-01-08", settlement: { cashPaise: 500 } }, tdb);
+    const all = await listActivity({}, tdb);
+    expect(all.map((a) => a.businessDate)).toEqual(["2026-01-12", "2026-01-08"]);
+    expect(all[0]).toMatchObject({ type: "RECEIPT", cashDeltaPaise: -1_000, partyId });
+    expect(await listActivity({ types: ["PAYMENT"] }, tdb)).toHaveLength(1);
+    expect(await listActivity({ from: "2026-01-10", limit: 5 }, tdb)).toHaveLength(1);
   });
 });

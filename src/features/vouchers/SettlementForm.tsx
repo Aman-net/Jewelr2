@@ -2,16 +2,18 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { Button } from "../../components/ui/Button.tsx";
-import { Chip, Steps } from "../../components/ui/Bits.tsx";
-import { Card, Page } from "../../components/ui/Card.tsx";
-import { Field, Input, Textarea } from "../../components/ui/Field.tsx";
+import { Chip } from "../../components/ui/Bits.tsx";
+import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
+import { AmountInput, Field, Input, Textarea } from "../../components/ui/Field.tsx";
+import { FlowHeader, StickyCta, type FlowTone } from "../../components/ui/Flow.tsx";
+import { useLeaveGuard } from "../../hooks/useLeaveGuard.tsx";
 import { SuccessView } from "../../components/ui/Success.tsx";
 import { postVoucher } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import type { BalanceDelta, PaymentMode, Voucher } from "../../domain/index.ts";
 import { usePartyList } from "../../hooks/useLive.ts";
 import { en } from "../../i18n/en.ts";
-import { formatGram, formatINR, parseGramsToMg, parsePercentToScaled, parseRupeesToPaise, todayLocal } from "../../lib/format.ts";
+import { parseGramsToMg, parsePercentToScaled, parseRupeesToPaise, todayLocal } from "../../lib/format.ts";
 import { uuid } from "../../lib/uuid.ts";
 import { PartyPicker } from "./fields.tsx";
 import { Review } from "./Review.tsx";
@@ -64,6 +66,10 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
   const silverTunch = watch("silverTunch");
   const partyName = (partyList ?? []).find((p) => p.id === partyId)?.name ?? "";
   const title = kind === "RECEIPT" ? "Got payment" : "Paid out";
+  const tone: FlowTone = kind === "RECEIPT" ? "emerald" : "orange";
+  const shell = "mx-auto w-full max-w-xl px-4 pb-6 pt-4";
+  const backTo = state.prefill?.partyId ?? params.get("party") ? `/parties/${state.prefill?.partyId ?? params.get("party")}` : "/vouchers/new";
+  const { prompt } = useLeaveGuard(step >= 1 && !posted);
 
   const nextFromParty = () => {
     setError("");
@@ -146,10 +152,9 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
           <SuccessView
             title={kind === "RECEIPT" ? "Payment recorded" : "Payout recorded"}
             summary={
-              <div className="rounded-xl bg-stone-50 p-3 text-sm text-stone-700">
-                {partyName} · {d.cashPaise !== 0 && <>{formatINR(Math.abs(d.cashPaise))} </>}
-                {d.goldFineMg !== 0 && <>gold {formatGram(Math.abs(d.goldFineMg))} </>}
-                {d.silverFineMg !== 0 && <>silver {formatGram(Math.abs(d.silverFineMg))}</>}
+              <div className="flex flex-col gap-2">
+                <div className="text-sm text-stone-500">{partyName}</div>
+                <BalanceGrid cashPaise={d.cashPaise} goldFineMg={d.goldFineMg} silverFineMg={d.silverFineMg} />
               </div>
             }
             primary={{ label: "View khata", onClick: () => navigate(`/parties/${posted.partyId}`) }}
@@ -163,41 +168,50 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
   if (step === 2 && preview) {
     const d = voucherDeltas(preview);
     return (
-      <Page title={en.voucher.review}>
-        <Steps current={2} labels={["Party", "Amount", "Review"]} />
-        <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
-          partyName={partyName} posting={posting} error={error}
-          onBack={() => { setPreview(null); setStep(1); }} onConfirm={onConfirm} />
-      </Page>
+      <div className={shell}>
+        <div className="flex flex-col gap-3">
+          <FlowHeader tone={tone} title="Review entry" context={partyName} current={2} labels={["Party", "Amount", "Review"]} />
+          <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
+            partyName={partyName} posting={posting} error={error}
+            onBack={() => { setPreview(null); setStep(1); }} onConfirm={onConfirm} />
+          {prompt}
+        </div>
+      </div>
     );
   }
 
   return (
-    <Page title={title}>
-      <Steps current={step} labels={["Party", "Amount", "Review"]} />
-      {step === 0 && (
-        <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); nextFromParty(); }}>
-          <Card>
-            <div className="flex flex-col gap-3">
-              <div className="text-sm text-stone-500">{kind === "RECEIPT" ? "Who paid you?" : "Who did you pay?"}</div>
-              <PartyPicker value={partyId} onChange={(id) => setValue("partyId", id)} />
-              <Field label={en.voucher.date}><Input type="date" {...register("businessDate", { required: true })} max={todayLocal()} /></Field>
-            </div>
-          </Card>
-          {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
-          <Button type="submit">Continue →</Button>
-        </form>
-      )}
-      {step === 1 && (
-        <form className="flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
-          <div className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            {kind === "RECEIPT" ? "Received from" : "Paid to"} <b>{partyName || "…"}</b>
-            <button type="button" className="ml-2 underline" onClick={() => setStep(0)}>change</button>
-          </div>
-          <Card>
-            <div className="flex flex-col gap-3">
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="Cash" unit={en.units.inr}><Input {...register("cash")} inputMode="decimal" placeholder="0.00" autoFocus /></Field>
+    <div className={shell}>
+      <div className="flex flex-col gap-3">
+        <FlowHeader
+          tone={tone}
+          title={title}
+          backTo={backTo}
+          context={step === 1 ? (kind === "RECEIPT" ? `Received from ${partyName || "…"}` : `Paid to ${partyName || "…"}`) : undefined}
+          onChangeContext={step === 1 ? () => setStep(0) : undefined}
+          current={step}
+          labels={["Party", "Amount", "Review"]}
+        />
+        {step === 0 && (
+          <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); nextFromParty(); }}>
+            <Card>
+              <div className="flex flex-col gap-3">
+                <div className="text-sm text-stone-500">{kind === "RECEIPT" ? "Who paid you?" : "Who did you pay?"}</div>
+                <PartyPicker value={partyId} onChange={(id) => setValue("partyId", id)} />
+                <Field label={en.voucher.date}><Input type="date" {...register("businessDate", { required: true })} max={todayLocal()} /></Field>
+              </div>
+            </Card>
+            {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
+            <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">Continue →</Button></StickyCta>
+          </form>
+        )}
+        {step === 1 && (
+          <form className="flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
+            <Card>
+              <div className="flex flex-col gap-3">
+                <Field label={kind === "RECEIPT" ? "Cash received" : "Cash paid"} unit={en.units.inr}>
+                  <AmountInput prefix="₹" {...register("cash")} inputMode="decimal" placeholder="0.00" autoFocus />
+                </Field>
                 <Field label="Mode">
                   <div className="flex gap-1.5">
                     {(["CASH", "UPI", "BANK"] as const).map((m) => (
@@ -212,11 +226,10 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
                     ))}
                   </div>
                 </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="Gold" unit={en.units.g}><Input {...register("goldG")} inputMode="decimal" placeholder="0.000" /></Field>
-                <Field label="Silver" unit={en.units.g}><Input {...register("silverG")} inputMode="decimal" placeholder="0.000" /></Field>
-              </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Gold" unit={en.units.g}><Input {...register("goldG")} inputMode="decimal" placeholder="0.000" /></Field>
+                  <Field label="Silver" unit={en.units.g}><Input {...register("silverG")} inputMode="decimal" placeholder="0.000" /></Field>
+                </div>
               <Field label="Gold tunch" unit={en.units.percent}>
                 <div className="flex flex-wrap gap-1.5">
                   {TUNCH_SHORTCUTS.map((t) => (
@@ -243,9 +256,11 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
             </div>
           </details>
           {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
-          <Button type="submit">{en.voucher.review} →</Button>
+          <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">{en.voucher.review} →</Button></StickyCta>
         </form>
       )}
-    </Page>
+      {prompt}
+    </div>
+  </div>
   );
 }

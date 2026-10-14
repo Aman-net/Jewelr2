@@ -3,7 +3,9 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Chip, EmptyState, Steps } from "./Bits.tsx";
+import { FlowHeader } from "./Flow.tsx";
 import { Segmented } from "./Segmented.tsx";
+import { initialsOf } from "./PartyAvatar.tsx";
 import { DuesHead } from "./Dues.tsx";
 
 afterEach(() => cleanup());
@@ -42,8 +44,31 @@ describe("wizard bits", () => {
   });
 });
 
-describe("dues framing", () => {
-  it("frames receivable vs payable in operator words", () => {
+describe("flow header", () => {
+  it("shows the verb, party context and progress", () => {
+    render(
+      <FlowHeader
+        tone="emerald"
+        title="Got payment"
+        context="Received from Sharma"
+        current={1}
+        labels={["Party", "Amount", "Review"]}
+      />,
+    );
+    expect(screen.getByText("Got payment")).toBeTruthy();
+    expect(screen.getByText(/Received from Sharma/)).toBeTruthy();
+    expect(screen.getByText("Amount")).toBeTruthy();
+  });
+});
+
+describe("party avatars", () => {  it("derives initials from first and last words", () => {
+    expect(initialsOf("Sharma Bullion")).toBe("SB");
+    expect(initialsOf("Verma")).toBe("V");
+    expect(initialsOf("  ")).toBe("?");
+  });
+});
+
+describe("dues framing", () => {  it("frames receivable vs payable in operator words", () => {
     const { unmount } = render(<DuesHead cashPaise={50000} goldFineMg={0} silverFineMg={0} />);
     expect(screen.getByText("You will get")).toBeTruthy();
     unmount();

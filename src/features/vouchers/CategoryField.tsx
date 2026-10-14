@@ -53,7 +53,7 @@ export function CategoryField({ metal, value, onPick }: {
         </button>
       </Field>
       {open && (
-        <Sheet title={en.item.pick} onClose={() => { setOpen(false); setQ(""); }}>
+        <Sheet title={`Pick ${metal === "GOLD" ? "gold" : "silver"} item`} onClose={() => { setOpen(false); setQ(""); }}>
           <div className="flex flex-col gap-3">
             <Input placeholder={en.item.search} value={q} onChange={(e) => setQ(e.target.value)} inputMode="search" autoFocus />
             {recent.length > 0 && (

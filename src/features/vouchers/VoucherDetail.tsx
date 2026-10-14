@@ -2,12 +2,18 @@ import Decimal from "decimal.js";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { Pencil, Undo2 } from "lucide-react";
 import { Button } from "../../components/ui/Button.tsx";
+import { Sheet } from "../../components/ui/Bits.tsx";
 import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
 import { Field, Textarea } from "../../components/ui/Field.tsx";
+import { toneForVoucher } from "../../components/ui/Flow.tsx";
+import { TypeTag, MetalTag } from "../../components/ui/TypeTag.tsx";
 import { db, getVoucher, reverseVoucher } from "../../data/index.ts";
+import { usePartyList } from "../../hooks/useLive.ts";
 import { en } from "../../i18n/en.ts";
-import { formatGram, formatINR, formatTunch } from "../../lib/format.ts";
+import { formatGram, formatINR, formatRate, formatTime, formatTunch } from "../../lib/format.ts";
+import { cn } from "../../lib/cn.ts";
 import type { SalePurchaseLine } from "../../domain/index.ts";
 
 const mgToG = (mg: number) => new Decimal(mg).div(1000).toString();
@@ -37,11 +43,22 @@ export function VoucherDetailPage() {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const partyList = usePartyList();
 
   if (stored === undefined) return <Page title=""><Card><p className="text-sm text-stone-500">Loading…</p></Card></Page>;
   if (!stored) return <Page title="Voucher"><Card><p className="text-sm text-stone-500">Voucher not found.</p></Card></Page>;
   const { voucher: v, entry: e } = stored;
+  const partyName = (partyList ?? []).find((p) => p.id === v.partyId)?.name ?? "";
   const reversible = v.type !== "REVERSAL" && !reversal;
+  const tone = toneForVoucher(v.type);
+  const toneBg: Record<string, string> = {
+    amber: "from-amber-600 to-amber-800",
+    sky: "from-sky-600 to-sky-800",
+    emerald: "from-emerald-600 to-emerald-800",
+    orange: "from-orange-600 to-orange-800",
+    violet: "from-violet-600 to-violet-800",
+    stone: "from-stone-700 to-stone-900",
+  };
 
   const doReverse = async () => {
     if (!reason.trim()) {
@@ -117,84 +134,173 @@ export function VoucherDetailPage() {
   };
 
   return (
-    <Page
-      title={`${v.type.charAt(0)}${v.type.slice(1).toLowerCase()}`}
-      action={<Link to={`/parties/${v.partyId}`} className="text-sm font-medium text-amber-800">Khata ›</Link>}
-    >
+    <Page title="" backTo={`/parties/${v.partyId}`} backLabel="Khata">
+      <div className={cn("rounded-3xl bg-gradient-to-br p-5 text-white shadow-md", toneBg[tone])}>
+        <div className="flex items-center gap-2">
+          <TypeTag type={v.type} className="bg-white/25 text-white" />
+          {reversal ? (
+            <span className="rounded bg-black/30 px-1.5 py-0.5 text-[11px] font-bold uppercase">Reversed</span>
+          ) : (
+            <span className="rounded bg-black/30 px-1.5 py-0.5 text-[11px] font-bold uppercase">Active</span>
+          )}
+        </div>
+        <Link to={`/parties/${v.partyId}`} className="mt-2 block truncate text-2xl font-bold tracking-tight">
+          {partyName || "Open khata"} ›
+        </Link>
+        <div className="mt-1 text-sm text-white/85">
+          {v.businessDate}{v.referenceNumber ? ` · Bill ${v.referenceNumber}` : ""}
+        </div>
+        <div className="mt-0.5 text-xs text-white/70">Recorded {formatTime(v.createdAt)}</div>
+      </div>
       <Card>
-        <div className="mb-1 text-sm text-stone-500">{v.businessDate}{v.referenceNumber ? ` · Ref ${v.referenceNumber}` : ""}</div>
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-stone-500">Ledger change</div>
         <BalanceGrid cashPaise={e.cashDeltaPaise} goldFineMg={e.goldFineDeltaMg} silverFineMg={e.silverFineDeltaMg} />
-        {v.notes ? <div className="mt-2 text-sm text-stone-700">{v.notes}</div> : null}
+        {v.notes ? <div className="mt-2 border-t border-dashed border-stone-200 pt-2 text-sm text-stone-700">{v.notes}</div> : null}
       </Card>
-      {v.lines.map((l, i) => (
-        <Card key={l.id}>
-          <div className="text-sm font-medium text-stone-900">Line {i + 1} · {l.metalType} · {l.categoryName}</div>
-          <div className="mt-1 text-sm text-stone-700">
-            {formatGram(l.physicalMg)} at {formatTunch(l.agreedTunchScaled)} → fine {formatGram(l.fineMg)}
-            {l.pricingMode === "CASH_AT_RATE" ? ` · ${formatINR(l.lineCashPaise)}` : " · rate open"}
-            {l.labourPaise > 0 ? ` · labour ${formatINR(l.labourPaise)}` : ""}
+      {(v.lines.length > 0 || v.settlement || v.conversion) && (
+        <div className="overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-sm">
+          <div className="border-b border-stone-200 bg-stone-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-widest text-stone-500">
+            Breakdown
           </div>
-        </Card>
-      ))}
-      {v.settlement && (
-        <Card>
-          <div className="text-sm text-stone-700">
-            {(v.settlement.cashPaise ?? 0) > 0 ? `Cash ${formatINR(v.settlement.cashPaise ?? 0)} ` : ""}
-            {v.settlement.goldFineMg > 0 ? `Gold ${formatGram(v.settlement.goldFineMg)} ` : ""}
-            {v.settlement.silverFineMg > 0 ? `Silver ${formatGram(v.settlement.silverFineMg)} ` : ""}
-            {v.settlement.paymentMode ? `· ${v.settlement.paymentMode}` : ""}
-          </div>
-        </Card>
-      )}
-      {v.conversion && (
-        <Card>
-          <div className="text-sm text-stone-700">
-            {formatGram(v.conversion.fineMg)} {v.conversion.metalType} ⇄ {formatINR(v.conversion.cashPaise)}
-          </div>
-        </Card>
+          {v.lines.map((l, i) => (
+            <div key={l.id} className="border-b border-dashed border-stone-200 px-4 py-3 last:border-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-base font-bold text-stone-900">#{i + 1} {l.categoryName}</span>
+                <MetalTag metal={l.metalType} />
+              </div>
+              <div className="mt-2 grid grid-cols-[1fr_auto_1fr_auto_1.2fr] items-stretch gap-1 text-center">
+                <div className="rounded-xl bg-stone-50 px-1 py-1.5">
+                  <div className="text-sm font-bold text-stone-900">{formatGram(l.physicalMg)}</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-stone-500">weight</div>
+                </div>
+                <div className="self-center text-sm font-bold text-stone-400">×</div>
+                <div className="rounded-xl bg-stone-50 px-1 py-1.5">
+                  <div className="text-sm font-bold text-stone-900">{formatTunch(l.agreedTunchScaled)}</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-stone-500">agreed</div>
+                </div>
+                <div className="self-center text-sm font-bold text-stone-400">=</div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-1 py-1.5">
+                  <div className="text-sm font-bold text-emerald-900">{formatGram(l.fineMg)}</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-emerald-700">fine</div>
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                <span className="text-sm text-stone-600">
+                  {l.pricingMode === "CASH_AT_RATE" ? "Party owes" : "Owes metal"}
+                </span>
+                {l.pricingMode === "CASH_AT_RATE" ? (
+                  <span className="text-lg font-bold tracking-tight text-stone-900">
+                    {formatINR(l.lineCashPaise + l.labourPaise)}
+                  </span>
+                ) : (
+                  <span className="text-sm font-semibold text-stone-700">rate fixed later</span>
+                )}
+              </div>
+              {l.pricingMode === "CASH_AT_RATE" && l.rateAmountPaise !== undefined && l.rateUnit && (
+                <div className="mt-1.5 flex items-center justify-between gap-2 px-1 text-sm text-stone-600">
+                  <span>Rate agreed</span>
+                  <span className="font-semibold text-stone-900">{formatRate(l.rateAmountPaise, l.rateUnit)}</span>
+                </div>
+              )}
+              {l.labourPaise > 0 && (
+                <div className="mt-1.5 flex items-center justify-between gap-2 px-1 text-sm font-semibold text-stone-700">
+                  <span>Labour ({formatGram(l.physicalMg)} × {formatINR(l.labourPaisePerGram ?? 0)}/g)</span>
+                  <span>{formatINR(l.labourPaise)}</span>
+                </div>
+              )}
+            </div>
+          ))}
+          {v.settlement && (
+            <div className="border-b border-dashed border-stone-200 px-4 py-3 last:border-0">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-stone-500">Settlement</div>
+              {(v.settlement.cashPaise ?? 0) > 0 && (
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                  <span className="text-sm text-stone-600">Cash</span>
+                  <span className="text-lg font-bold tracking-tight text-stone-900">{formatINR(v.settlement.cashPaise ?? 0)}</span>
+                </div>
+              )}
+              {v.settlement.goldFineMg > 0 && (
+                <div className="mt-1.5 flex items-center justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2">
+                  <span className="text-sm text-stone-600">
+                    Gold {v.settlement.goldPhysicalMg ? `${formatGram(v.settlement.goldPhysicalMg)} × ${formatTunch(v.settlement.goldTunchScaled ?? 0)}` : ""}
+                  </span>
+                  <span className="text-sm font-bold text-amber-700">{formatGram(v.settlement.goldFineMg)} fine</span>
+                </div>
+              )}
+              {v.settlement.silverFineMg > 0 && (
+                <div className="mt-1.5 flex items-center justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2">
+                  <span className="text-sm text-stone-600">
+                    Silver {v.settlement.silverPhysicalMg ? `${formatGram(v.settlement.silverPhysicalMg)} × ${formatTunch(v.settlement.silverTunchScaled ?? 0)}` : ""}
+                  </span>
+                  <span className="text-sm font-bold text-slate-600">{formatGram(v.settlement.silverFineMg)} fine</span>
+                </div>
+              )}
+              {v.settlement.paymentMode ? (
+                <div className="mt-1.5">
+                  <span className="rounded-full bg-stone-200 px-2.5 py-0.5 text-[11px] font-bold text-stone-700">via {v.settlement.paymentMode}</span>
+                </div>
+              ) : null}
+            </div>
+          )}
+          {v.conversion && (
+            <div className="px-4 py-2.5 text-sm text-stone-700">
+              {v.conversion.direction === "METAL_TO_CASH" ? "Metal → cash" : "Cash → metal"} ·{" "}
+              <b>{formatGram(v.conversion.fineMg)}</b> {v.conversion.metalType} ⇄ <b>{formatINR(v.conversion.cashPaise)}</b>
+              <div className="mt-1 text-stone-600">
+                Rate agreed <b className="text-stone-900">{formatRate(v.conversion.rateAmountPaise, v.conversion.rateUnit)}</b>
+              </div>
+            </div>
+          )}
+        </div>
       )}
       {v.type === "REVERSAL" && (
-        <Card>
-          <div className="text-sm text-stone-700">
-            Reverses <Link to={`/vouchers/${v.reversesVoucherId}`} className="font-medium text-amber-800">original ›</Link>
-            <div>Reason: {v.reversalReason}</div>
-          </div>
-        </Card>
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-stone-700">
+          Reverses <Link to={`/vouchers/${v.reversesVoucherId}`} className="font-semibold text-red-800">original ›</Link>
+          <div className="mt-1">Reason: {v.reversalReason}</div>
+        </div>
       )}
       {reversal && (
-        <Card>
-          <div className="text-sm text-stone-700">
-            {en.voucher.reversedBy} <Link to={`/vouchers/${reversal.id}`} className="font-medium text-amber-800">reversal ›</Link>
-          </div>
-        </Card>
-      )}
-      <Card>
-        <div className="text-xs text-stone-500">
-          Calculation {v.calculationVersion} · posted {new Date(v.createdAt).toLocaleString("en-IN")}
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-stone-700">
+          {en.voucher.reversedBy} <Link to={`/vouchers/${reversal.id}`} className="font-semibold text-red-800">reversal ›</Link>
         </div>
-      </Card>
+      )}
+      <details className="rounded-2xl border border-stone-200 bg-white px-4 py-3">
+        <summary className="cursor-pointer text-xs font-medium text-stone-400">Record details</summary>
+        <div className="pt-1 text-xs text-stone-500">
+          Posted {new Date(v.createdAt).toLocaleString("en-IN")} · rules {v.calculationVersion}
+        </div>
+      </details>
       {reversible && !showReverse && (
         <div className="flex gap-2">
-          <div className="flex-1"><Button variant="secondary" full onClick={() => setShowReverse(true)}>{en.voucher.reverse}</Button></div>
+          <div className="flex-1">
+            <Button variant="secondary" full onClick={() => setShowReverse(true)} className="min-h-12">
+              <Undo2 size={18} /> {en.voucher.reverse}
+            </Button>
+          </div>
           {(v.type === "SALE" || v.type === "PURCHASE" || v.type === "RECEIPT" || v.type === "PAYMENT" || v.type === "CONVERSION") && (
-            <div className="flex-1"><Button variant="secondary" full onClick={() => setShowReverse(true)}>{en.voucher.correct}</Button></div>
+            <div className="flex-1">
+              <Button variant="secondary" full onClick={() => setShowReverse(true)} className="min-h-12">
+                <Pencil size={18} /> {en.voucher.correct}
+              </Button>
+            </div>
           )}
         </div>
       )}
       {reversible && showReverse && (
-        <Card>
+        <Sheet title={`${en.voucher.reverse} / ${en.voucher.correct}`} onClose={() => { setShowReverse(false); setError(""); }}>
           <div className="flex flex-col gap-3">
             <Field label={en.voucher.reason}>
-              <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="e.g. wrong tunch written" />
+              <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="e.g. wrong tunch written" autoFocus />
             </Field>
             {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
-            <div className="flex gap-2">
-              <div className="flex-1"><Button variant="secondary" full onClick={() => { setShowReverse(false); setError(""); }}>{en.common.cancel}</Button></div>
-              <div className="flex-1"><Button variant="danger" full onClick={doReverse} disabled={busy}>{en.voucher.reverse}</Button></div>
-              <div className="flex-1"><Button full onClick={doCorrect} disabled={busy}>{en.voucher.correct}</Button></div>
-            </div>
+            <Button variant="danger" full onClick={doReverse} disabled={busy} className="min-h-12">
+              <Undo2 size={18} /> {en.voucher.reverse} only
+            </Button>
+            <Button full onClick={doCorrect} disabled={busy} className="min-h-12">
+              <Pencil size={18} /> {en.voucher.correct} (reverse + new)
+            </Button>
           </div>
-        </Card>
+        </Sheet>
       )}
     </Page>
   );

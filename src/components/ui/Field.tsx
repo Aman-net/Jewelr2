@@ -44,3 +44,18 @@ export function CheckRow({ label, children }: { label: string; children: ReactNo
     </label>
   );
 }
+
+/** Big tactile amount input with a unit prefix (₹/g/%) for hero fields. */
+export function AmountInput({ prefix, className, ...props }: InputHTMLAttributes<HTMLInputElement> & { prefix: string }) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-stone-400">
+        {prefix}
+      </span>
+      <input
+        {...props}
+        className={cn(controlClass, "py-3 pl-10 text-2xl font-bold tracking-tight", className)}
+      />
+    </div>
+  );
+}

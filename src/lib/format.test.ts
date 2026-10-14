@@ -3,6 +3,7 @@ import {
   balanceText,
   formatGram,
   formatINR,
+  formatRate,
   formatTunch,
   parseGramsToMg,
   parsePercentToScaled,
@@ -26,6 +27,11 @@ describe("display formatting", () => {
     expect(balanceText(0).direction).toBe("flat");
     expect(balanceText(5).direction).toBe("in");
     expect(balanceText(-5).direction).toBe("out");
+  });
+
+  it("formats deal rates with explicit units", () => {
+    expect(formatRate(10000000, "GOLD_PER_10G")).toBe("₹1,00,000.00 per 10 g");
+    expect(formatRate(10000000, "SILVER_PER_KG")).toBe("₹1,00,000.00 per kg");
   });
 });
 

@@ -41,7 +41,7 @@ describe("Review", () => {
       />,
     );
     expect(screen.getByText(/Sharma/)).toBeTruthy();
-    expect(screen.getByText("80 g")).toBeTruthy();
+    expect(screen.getAllByText("80 g")).toHaveLength(2); // trio grid + line breakdown
     expect(screen.getByText("Confirm & post")).toBeTruthy();
   });
 

@@ -14,6 +14,7 @@ export { createParty, getParty, listParties, searchParties, updateParty } from "
 export type { CreatePartyInput, UpdatePartyPatch } from "./parties.ts";
 export {
   assembleVoucher,
+  assertSingleOpening,
   getVoucher,
   listVouchers,
   postVoucher,
@@ -27,11 +28,13 @@ export {
   getAllBalances,
   getBalances,
   getBalancesAsOf,
+  getEntriesInRange,
   getLedger,
+  listActivity,
   rebuildLedger,
   storedEntriesByVoucher,
 } from "./ledger.ts";
-export type { LedgerFilter } from "./ledger.ts";
+export type { ActivityFilter, ActivityRow, LedgerFilter, LedgerRow } from "./ledger.ts";
 export {
   APP_VERSION,
   BACKUP_FORMAT,

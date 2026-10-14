@@ -10,6 +10,9 @@ export interface LedgerFilter {
   types?: string[];
 }
 
+/** Ledger row with the recording timestamp (for intra-day ordering). */
+export type LedgerRow = LedgerEntryDelta & { createdAt: string };
+
 function toDelta(e: {
   voucherId: string;
   partyId: string;
@@ -48,7 +51,7 @@ export async function getLedger(
   partyId: string,
   filter: LedgerFilter = {},
   dbx: JewelrDb = db,
-): Promise<LedgerEntryDelta[]> {
+): Promise<LedgerRow[]> {
   let rows = await dbx.ledger_entries.where("partyId").equals(partyId).toArray();
   if (filter.from) rows = rows.filter((r) => r.businessDate >= (filter.from as string));
   if (filter.to) rows = rows.filter((r) => r.businessDate <= (filter.to as string));
@@ -60,7 +63,7 @@ export async function getLedger(
     rows = rows.filter((r) => set.has(byId.get(r.voucherId)?.type ?? ""));
   }
   chronological(rows);
-  return rows.map(toDelta);
+  return rows.map((r) => ({ ...toDelta(r), createdAt: r.createdAt }));
 }
 
 export async function getBalances(partyId: string, dbx: JewelrDb = db): Promise<BalanceDelta> {
@@ -113,4 +116,65 @@ export async function storedEntriesByVoucher(dbx: JewelrDb = db): Promise<Ledger
   const rows = await dbx.ledger_entries.toArray();
   rows.sort((a, b) => a.voucherId.localeCompare(b.voucherId));
   return rows.map(toDelta);
+}
+
+/** All entries in a business-date range, chronological. Powers period totals. */
+export async function getEntriesInRange(from: string, to: string, dbx: JewelrDb = db): Promise<LedgerEntryDelta[]> {
+  const rows = await dbx.ledger_entries.where("businessDate").between(from, to, true, true).toArray();
+  chronological(rows);
+  return rows.map(toDelta);
+}
+
+export interface ActivityRow {
+  voucherId: string;
+  partyId: string;
+  businessDate: string;
+  type: string;
+  cashDeltaPaise: number;
+  goldFineDeltaMg: number;
+  silverFineDeltaMg: number;
+  description: string;
+}
+
+export interface ActivityFilter {
+  from?: string;
+  to?: string;
+  types?: string[];
+  limit?: number;
+}
+
+/**
+ * Activity feed: vouchers joined with their ledger deltas, newest first.
+ * One query for the UI — no N+1 reads from components.
+ */
+export async function listActivity(filter: ActivityFilter = {}, dbx: JewelrDb = db): Promise<ActivityRow[]> {
+  let vouchers = await dbx.vouchers.toArray();
+  if (filter.from) vouchers = vouchers.filter((v) => v.businessDate >= (filter.from as string));
+  if (filter.to) vouchers = vouchers.filter((v) => v.businessDate <= (filter.to as string));
+  if (filter.types && filter.types.length > 0) {
+    const set = new Set(filter.types);
+    vouchers = vouchers.filter((v) => set.has(v.type));
+  }
+  const entries = await Promise.all(vouchers.map((v) => dbx.ledger_entries.get(v.id)));
+  const rows: ActivityRow[] = [];
+  vouchers.forEach((v, i) => {
+    const e = entries[i];
+    if (!e) throw new Error(`Ledger entry missing for voucher ${v.id}`);
+    rows.push({
+      voucherId: v.id,
+      partyId: v.partyId,
+      businessDate: v.businessDate,
+      type: v.type,
+      cashDeltaPaise: e.cashDeltaPaise,
+      goldFineDeltaMg: e.goldFineDeltaMg,
+      silverFineDeltaMg: e.silverFineDeltaMg,
+      description: e.description,
+    });
+  });
+  rows.sort((a, b) =>
+    a.businessDate === b.businessDate
+      ? b.voucherId.localeCompare(a.voucherId)
+      : b.businessDate.localeCompare(a.businessDate),
+  );
+  return filter.limit !== undefined ? rows.slice(0, filter.limit) : rows;
 }
