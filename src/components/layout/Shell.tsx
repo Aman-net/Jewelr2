@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
-import { Home, Plus, Settings, Users, Wallet } from "lucide-react";
+import { Home, Plus, RefreshCw, Settings, Users, Wallet } from "lucide-react";
+import { useRegisterSW } from "virtual:pwa-register/react";
 import { getLastBackupAt } from "../../data/index.ts";
 import { en } from "../../i18n/en.ts";
 import { daysSince } from "../../lib/format.ts";
@@ -48,11 +49,34 @@ function navHidden(pathname: string): boolean {
   );
 }
 
+function UpdateBanner() {
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW();
+  if (!needRefresh) return null;
+  return (
+    <div className="flex items-center justify-between gap-2 bg-stone-900 px-4 py-2 text-sm text-white">
+      <span className="font-medium">A new version is ready — your data is safe.</span>
+      <button
+        className="flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-bold text-stone-900"
+        onClick={() => {
+          setNeedRefresh(false);
+          void updateServiceWorker(true);
+        }}
+      >
+        <RefreshCw size={14} /> Reload
+      </button>
+    </div>
+  );
+}
+
 export function Shell() {
   const location = useLocation();
   const showNav = !navHidden(location.pathname);
   return (
     <div className={showNav ? "app-shell min-h-svh bg-stone-100" : "min-h-svh bg-stone-100"}>
+      <UpdateBanner />
       <BackupBanner />
       <main>
         <Outlet />

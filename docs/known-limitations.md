@@ -1,10 +1,12 @@
-# Known limitations (MVP v0.1, Phase 3)
+# Known limitations (MVP v0.1, Phase 4)
 
 - Local-only: IndexedDB in this browser. No cloud sync, auth, remote backup,
   or tax compliance exists or is claimed. Clearing browser data without an
   export loses records.
-- Not yet a PWA: no manifest/service worker/install flow/offline precache
-  (Phase 4). `navigator.storage.persist()` not yet requested.
+- Installable + offline once loaded (precached shell, hash routing). No
+  offline write queue — there is nothing to queue: all writes are local.
+- Device testing so far is a Pixel 7-viewport E2E; install + restart survival
+  on the operator's real Android phone is the Phase 5 pilot's first job.
 - Golden scenarios are ILLUSTRATIVE arithmetic checks. No OWNER_APPROVED
   scenario exists yet — no real register examples have been shared.
 - Correction flow reverses first, then posts the replacement as a second step;

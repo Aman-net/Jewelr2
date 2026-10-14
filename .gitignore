@@ -45,6 +45,7 @@ node_modules
 npm-debug.log*
 npm-debug.log*
 pnpm-debug.log*
+test-results/
 yarn-debug.log*
 yarn-debug.log*
 yarn-error.log*

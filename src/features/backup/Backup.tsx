@@ -2,6 +2,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useRef, useState } from "react";
 import { Link } from "react-router";
 import { Download, ShieldAlert, ShieldCheck, Tags, Upload } from "lucide-react";
+import { STORAGE_KEY } from "../../lib/persist.ts";
 import { Button } from "../../components/ui/Button.tsx";
 import { Card, Page } from "../../components/ui/Card.tsx";
 import { CheckRow } from "../../components/ui/Field.tsx";
@@ -27,6 +28,7 @@ function countsLine(c: BackupCounts): string {
 
 export function BackupPage() {
   const last = useLiveQuery(() => getLastBackupAt(), []);
+  const persisted = useLiveQuery(() => db.app_settings.get(STORAGE_KEY).then((r) => r?.value), []);
   const fileRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -183,6 +185,14 @@ export function BackupPage() {
         <div className="flex flex-col gap-1 text-xs text-stone-500">
           <div>Jewelr {APP_VERSION} · rules {CALCULATION_VERSION}</div>
           <div>{en.localOnly}</div>
+          <div>
+            {persisted === undefined
+              ? "Checking storage durability…"
+              : persisted === "true"
+                ? "Storage: persistent — the browser won't auto-clear your records."
+                : "Storage: limited — the browser may clear records; keep exports."}
+          </div>
+          <div>Install the app to your home screen for the most durable storage.</div>
         </div>
       </Card>
 

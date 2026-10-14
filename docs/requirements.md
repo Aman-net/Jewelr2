@@ -13,7 +13,11 @@ illustrative golden scenarios. No UI, no Dexie, no backup, no cloud/auth.
 - Phase 3: DONE — core UX in route order (shell + local-data status; parties;
   opening balances; ledger + as-of; sale/purchase with review-before-post;
   receipts/payments/conversion; reversal + correction workflow; summary; backup screen).
-- Phase 4: PWA install/offline/update flow, persistence request, backup banner tuning.
+- Phase 4: DONE — installable PWA (manifest, icons, precached shell, offline-first
+  hash routing), storage-persistence request + status, safe update prompt,
+  lazy-loaded heavy screens; E2E on mobile viewport (create → transact →
+  reload persistence → offline open).
+- Phase 5: 2-week parallel-run pilot with 5–10 real parties.
 - Phase 4: PWA install/offline/update flow, persistence, backup banner.
 - Phase 5: 2-week parallel-run pilot with 5–10 real parties.
 - v0.2 (only after validation): bill photos, print/share, aggregate stock,
