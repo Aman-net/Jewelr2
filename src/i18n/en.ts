@@ -1,0 +1,66 @@
+/**
+ * English label dictionary. All UI strings come from here so Hindi
+ * can be added later without touching components.
+ */
+export const en = {
+  appName: "Jewelr2 Hisaab",
+  localOnly: "Data stays on this device only — no cloud sync.",
+  nav: { home: "Home", parties: "Parties", add: "Add", summary: "Summary", settings: "Settings" },
+  backup: {
+    reminderNone: "Back up soon — no backup yet.",
+    reminderOk: "Last backup",
+    reminderWarn: "Backup overdue — last backup",
+    export: "Export backup",
+    import: "Import backup",
+    share: "Share",
+    download: "Download",
+  },
+  party: {
+    title: "Parties",
+    add: "Add party",
+    name: "Name",
+    mobile: "Mobile (optional)",
+    address: "Address (optional)",
+    notes: "Notes (optional)",
+    customer: "Customer",
+    supplier: "Supplier",
+    active: "Active",
+    search: "Search name or mobile",
+    duplicateWarn: "A party with this name already exists.",
+    owesYou: "owes you",
+    youOwe: "you owe",
+    settled: "settled",
+  },
+  voucher: {
+    sale: "Sale",
+    purchase: "Purchase",
+    receipt: "Receipt",
+    payment: "Payment",
+    conversion: "Conversion",
+    opening: "Opening balance",
+    adjustment: "Adjustment",
+    reversal: "Reversal",
+    review: "Review before posting",
+    confirm: "Confirm & post",
+    back: "Back",
+    date: "Date",
+    party: "Party",
+    rate: "Rate",
+    lastUsedRate: "Last used",
+    reverse: "Reverse",
+    correct: "Correct",
+    reason: "Reason (required)",
+    reversedBy: "Reversed by",
+  },
+  units: {
+    g: "g",
+    percent: "%",
+    inr: "₹",
+    per10g: "₹/10 g",
+    perKg: "₹/kg",
+    perGram: "₹/g",
+  },
+  common: { save: "Save", cancel: "Cancel", today: "Today", all: "All", from: "From", to: "To", type: "Type" },
+} as const;
+
+export type Labels = typeof en;

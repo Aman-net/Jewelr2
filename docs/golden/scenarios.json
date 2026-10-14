@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "note": "ILLUSTRATIVE scenarios test arithmetic only. Only OWNER_APPROVED scenarios count as business validation. No real register examples shared yet.",
+  "scenarios": [
+    {
+      "id": "S001",
+      "title": "Sale of 100 g silver at 80% tunch, rate open",
+      "status": "ILLUSTRATIVE",
+      "steps": [
+        {
+          "type": "SALE",
+          "party": "P1",
+          "date": "2026-01-10",
+          "lines": [
+            {
+              "metalType": "SILVER",
+              "categoryName": "Payal",
+              "physicalMg": 100000,
+              "recordedTunchScaled": 7950,
+              "agreedTunchScaled": 8000,
+              "pricingMode": "METAL_OPEN"
+            }
+          ]
+        }
+      ],
+      "expect": { "P1": { "cashPaise": 0, "goldFineMg": 0, "silverFineMg": 80000 } }
+    },
+    {
+      "id": "S002",
+      "title": "Sale of 10 g gold at agreed rate with labour",
+      "status": "ILLUSTRATIVE",
+      "steps": [
+        {
+          "type": "SALE",
+          "party": "P1",
+          "date": "2026-01-11",
+          "lines": [
+            {
+              "metalType": "GOLD",
+              "categoryName": "Biscuit",
+              "physicalMg": 10000,
+              "agreedTunchScaled": 10000,
+              "pricingMode": "CASH_AT_RATE",
+              "rateAmountPaise": 10000000,
+              "rateUnit": "GOLD_PER_10G",
+              "labourPaisePerGram": 5000
+            }
+          ]
+        }
+      ],
+      "expect": { "P1": { "cashPaise": 10050000, "goldFineMg": 0, "silverFineMg": 0 } }
+    },
+    {
+      "id": "S003",
+      "title": "Mixed receipt: cash plus silver metal",
+      "status": "ILLUSTRATIVE",
+      "steps": [
+        {
+          "type": "SALE",
+          "party": "P1",
+          "date": "2026-01-10",
+          "lines": [
+            {
+              "metalType": "SILVER",
+              "categoryName": "Payal",
+              "physicalMg": 100000,
+              "agreedTunchScaled": 8000,
+              "pricingMode": "METAL_OPEN"
+            }
+          ]
+        },
+        {
+          "type": "RECEIPT",
+          "party": "P1",
+          "date": "2026-01-12",
+          "settlement": { "cashPaise": 1000000, "silverPhysicalMg": 50000, "silverTunchScaled": 8000 }
+        }
+      ],
+      "expect": { "P1": { "cashPaise": -1000000, "goldFineMg": 0, "silverFineMg": 40000 } }
+    },
+    {
+      "id": "S004",
+      "title": "Purchase of gold, rate open (shop owes metal)",
+      "status": "ILLUSTRATIVE",
+      "steps": [
+        {
+          "type": "PURCHASE",
+          "party": "P2",
+          "date": "2026-01-10",
+          "lines": [
+            {
+              "metalType": "GOLD",
+              "categoryName": "Old gold",
+              "physicalMg": 20000,
+              "recordedTunchScaled": 8800,
+              "agreedTunchScaled": 9000,
+              "pricingMode": "METAL_OPEN"
+            }
+          ]
+        }
+      ],
+      "expect": { "P2": { "cashPaise": 0, "goldFineMg": -18000, "silverFineMg": 0 } }
+    },
+    {
+      "id": "S005",
+      "title": "Conversion of metal dues to cash at agreed rate",
+      "status": "ILLUSTRATIVE",
+      "steps": [
+        {
+          "type": "SALE",
+          "party": "P1",
+          "date": "2026-01-10",
+          "lines": [
+            {
+              "metalType": "GOLD",
+              "categoryName": "Biscuit",
+              "physicalMg": 10000,
+              "agreedTunchScaled": 10000,
+              "pricingMode": "METAL_OPEN"
+            }
+          ]
+        },
+        {
+          "type": "CONVERSION",
+          "party": "P1",
+          "date": "2026-01-15",
+          "conversion": {
+            "direction": "METAL_TO_CASH",
+            "metalType": "GOLD",
+            "fineMg": 10000,
+            "rateAmountPaise": 12000000,
+            "rateUnit": "GOLD_PER_10G"
+          }
+        }
+      ],
+      "expect": { "P1": { "cashPaise": 12000000, "goldFineMg": 0, "silverFineMg": 0 } }
+    }
+  ]
+}
