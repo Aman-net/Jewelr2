@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { useForm } from "react-hook-form";
 import { Button } from "../../components/ui/Button.tsx";
 import { Sheet } from "../../components/ui/Bits.tsx";
-import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
+import { Card, Page } from "../../components/ui/Card.tsx";
 import { AmountInput, Field, Input, Textarea } from "../../components/ui/Field.tsx";
 import { LoadingRow } from "../../components/ui/Loader.tsx";
 import { Segmented } from "../../components/ui/Segmented.tsx";
@@ -88,9 +88,21 @@ function BucketCard({ bucket }: { bucket: StockBucket }) {
       {open && (
         <Sheet title={`${bucket.name} · stock`} onClose={() => setOpen(false)}>
           <div className="flex flex-col gap-3">
-            <BalanceGrid cashPaise={0} goldFineMg={bucket.metal === "GOLD" ? bucket.fineMg : 0} silverFineMg={bucket.metal === "SILVER" ? bucket.fineMg : 0} />
-            <div className="text-sm text-stone-600">
-              Shelf {formatGram(bucket.physicalMg)}{bucket.pcs !== null ? ` · ${bucket.pcs} pcs` : " · pieces not tracked"}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-xl bg-stone-50 px-2 py-2 text-center">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-stone-400">Shelf weight</div>
+                <div className="text-sm font-bold text-stone-900">{formatGram(bucket.physicalMg)}</div>
+              </div>
+              <div className="rounded-xl bg-stone-50 px-2 py-2 text-center">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-stone-400">Pieces</div>
+                <div className="text-sm font-bold text-stone-900">{bucket.pcs !== null ? bucket.pcs : "—"}</div>
+              </div>
+              <div className="rounded-xl bg-stone-50 px-2 py-2 text-center">
+                <div className="flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-stone-400">
+                  <MetalTag metal={bucket.metal} />
+                </div>
+                <div className="text-sm font-bold text-stone-900">{formatGram(bucket.fineMg)} fine</div>
+              </div>
             </div>
             <ItemCfgForm metal={bucket.metal} name={bucket.name} />
             <div className="text-sm font-semibold text-stone-700">Movements</div>
@@ -165,7 +177,8 @@ export function ItemCfgForm({ metal, name }: { metal: MetalType; name: string })
   if (cfg === undefined) return <LoadingRow label="Loading item settings…" />;
   return (
     <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-stone-500">Item settings</div>
+      <div className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-stone-500">Defaults & low-stock alert</div>
+      <p className="mb-2 text-xs text-stone-500">Prefills tunch on sale entries; flags LOW here when stock falls below.</p>
       <div className="grid grid-cols-3 gap-2">
         <Field label="Tunch %">
           <Input value={tunch} onChange={(e) => setTunch(e.target.value)} inputMode="decimal" placeholder="—" />

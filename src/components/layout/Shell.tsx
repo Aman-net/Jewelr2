@@ -1,8 +1,10 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { Link, NavLink, Outlet, useLocation } from "react-router";
+import { useEffect } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate, useNavigationType } from "react-router";
 import { Home, Plus, RefreshCw, Settings, Users, Wallet } from "lucide-react";
 import { useRegisterSW } from "virtual:pwa-register/react";
-import { getLastBackupAt } from "../../data/index.ts";
+import { getLastBackupAt, getVoucher } from "../../data/index.ts";
+import { parentFor } from "../../lib/nav.ts";
 import { en } from "../../i18n/en.ts";
 import { daysSince } from "../../lib/format.ts";
 import { cn } from "../../lib/cn.ts";
@@ -73,8 +75,42 @@ function UpdateBanner() {
   );
 }
 
+/**
+ * System back, made deterministic: a POP navigation (phone back button,
+ * browser back, swipe) lands on the screen's declared parent instead of
+ * wherever history points. In-app back buttons already go to parents
+ * directly, so any POP reaching here is the platform gesture.
+ * Root has no parent — there the platform exits the app, as expected.
+ */
+function useDeterministicBack() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const navType = useNavigationType();
+  useEffect(() => {
+    if (navType !== "POP") return;
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx <= 0) return;
+    let cancelled = false;
+    void (async () => {
+      let parent: string | null;
+      if (/^\/vouchers\/[^/]+$/.test(location.pathname)) {
+        const id = location.pathname.split("/")[2] ?? "";
+        const stored = await getVoucher(id).catch(() => undefined);
+        parent = stored ? `/parties/${stored.voucher.partyId}` : "/";
+      } else {
+        parent = parentFor(location.pathname, location.search);
+      }
+      if (!cancelled && parent) navigate(parent, { replace: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname, location.search, navType, navigate]);
+}
+
 export function Shell() {
   const location = useLocation();
+  useDeterministicBack();
   const showNav = !navHidden(location.pathname);
   return (
     <div className={showNav ? "app-shell min-h-svh bg-stone-100" : "min-h-svh bg-stone-100"}>
@@ -98,8 +134,12 @@ export function Shell() {
                   )
                 }
               >
-                <Icon size={22} />
-                {label}
+                {({ isActive }) => (
+                  <>
+                    <Icon size={22} fill={isActive ? "currentColor" : "none"} />
+                    {label}
+                  </>
+                )}
               </NavLink>
             ))}
           </div>

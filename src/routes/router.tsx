@@ -1,7 +1,8 @@
 import { Suspense, lazy } from "react";
 import type { ReactNode } from "react";
-import { Navigate, RouterProvider, createHashRouter, useNavigate, useParams } from "react-router";
+import { Navigate, RouterProvider, createHashRouter, useLocation, useNavigate, useParams } from "react-router";
 import { Shell } from "../components/layout/Shell.tsx";
+import { AppErrorBoundary } from "../components/ui/ErrorBoundary.tsx";
 import { HomePage } from "../features/home/Home.tsx";
 import { KhataPage } from "../features/parties/Khata.tsx";
 import { PartyEditPage } from "../features/parties/PartyEdit.tsx";
@@ -47,7 +48,7 @@ function deferred(node: ReactNode) {
  */
 const router = createHashRouter([
   {
-    element: <Shell />,
+    element: <BoundShell />,
     children: [
       { index: true, element: <HomePage /> },
       { path: "parties", element: <PartyListPage /> },
@@ -81,6 +82,16 @@ export function Router() {
 function PartyNewWrapper() {
   const navigate = useNavigate();
   return <PartyNewPage onDone={(id, dup) => navigate(`/parties/${id}`, { state: { duplicateName: dup } })} />;
+}
+
+/** Boundary keyed by route: navigating away from a crash clears it. */
+function BoundShell() {
+  const location = useLocation();
+  return (
+    <AppErrorBoundary key={location.pathname}>
+      <Shell />
+    </AppErrorBoundary>
+  );
 }
 
 function LedgerRedirect() {
