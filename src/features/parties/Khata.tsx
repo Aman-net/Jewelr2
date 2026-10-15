@@ -151,6 +151,7 @@ export function KhataPage() {
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold text-stone-700">Entries</span>
         <div className="flex gap-3">
+          <Link to={`/parties/${id}/bill`} className="text-sm font-medium text-amber-800">Bill</Link>
           <button className="text-sm font-medium text-amber-800" onClick={() => setAsOfOpen(true)}>Past balance</button>
           <button className="text-sm font-medium text-amber-800" onClick={() => setFilterOpen(true)}>
             Filter{(from || to || type !== "All") ? " • on" : ""}

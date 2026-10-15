@@ -10,6 +10,7 @@ import { RoleTags } from "../../components/ui/TypeTag.tsx";
 import { TypeTag } from "../../components/ui/TypeTag.tsx";
 import { Input } from "../../components/ui/Field.tsx";
 import { InstallCard } from "./InstallCard.tsx";
+import { StockHomeCard } from "../stock/Stock.tsx";
 import { listActivity } from "../../data/index.ts";
 import { useAllBalancesLive, usePartyList } from "../../hooks/useLive.ts";
 import { dayLabel, formatGram, formatINR } from "../../lib/format.ts";
@@ -47,6 +48,8 @@ export function HomePage() {
       </div>
 
       <InstallCard />
+
+      <StockHomeCard />
 
       <Input placeholder="Search party…" value={q} onChange={(e) => setQ(e.target.value)} inputMode="search" />
 

@@ -68,7 +68,18 @@ export function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
 }
 
-/** Khata-style day header: Today / Yesterday / 12 Jan 2026. */export function dayLabel(yyyyMmDd: string): string {
+/** Absolute date, never relative: 12 Jan 2026. Use on bills/prints viewed later. */
+export function formatDate(yyyyMmDd: string): string {
+  const [yy, mm, dd] = yyyyMmDd.split("-").map(Number);
+  return new Date(yy ?? 0, (mm ?? 1) - 1, dd ?? 1).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/** Khata-style day header: Today / Yesterday / 12 Jan 2026. */
+export function dayLabel(yyyyMmDd: string): string {
   const today = todayLocal();
   if (yyyyMmDd === today) return "Today";
   const y = new Date();

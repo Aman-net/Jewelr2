@@ -45,6 +45,8 @@ function navHidden(pathname: string): boolean {
     /^\/vouchers\/[^/]+$/.test(pathname) ||
     pathname === "/parties/new" ||
     pathname.endsWith("/edit") ||
+    pathname.endsWith("/bill") ||
+    pathname.endsWith("/move") ||
     pathname === "/settings/items"
   );
 }

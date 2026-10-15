@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import type { UseFormRegister, UseFormSetValue, UseFormWatch } from "react-hook-form";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
@@ -10,14 +10,16 @@ import { FlowHeader, StickyCta, type FlowTone } from "../../components/ui/Flow.t
 import { useLeaveGuard } from "../../hooks/useLeaveGuard.tsx";
 import { Segmented } from "../../components/ui/Segmented.tsx";
 import { SuccessView } from "../../components/ui/Success.tsx";
-import { getLastRate, postVoucher, setLastRate } from "../../data/index.ts";
+import { checkShortSale, getItemCfg, getLastRate, postVoucher, setLastRate } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import { fineToCash, GOLD_QUOTE_MG, SILVER_QUOTE_MG } from "../../domain/numeric/metalValue.ts";
 import { fineFromPhysical } from "../../domain/numeric/tunch.ts";
 import { labourPerKg, labourPerPiece } from "../../domain/numeric/labour.ts";
 import type { BalanceDelta, LabourMode, MetalType, PricingMode, Voucher } from "../../domain/index.ts";
-import { usePartyList } from "../../hooks/useLive.ts";
+import type { StockBucket } from "../../data/index.ts";
+import { usePartyList, useStockLive } from "../../hooks/useLive.ts";
 import { en } from "../../i18n/en.ts";
+import Decimal from "decimal.js";
 import { formatGram, formatINR, parseGramsToMg, parsePercentToScaled, parseRupeesToPaise, todayLocal } from "../../lib/format.ts";
 import { uuid } from "../../lib/uuid.ts";
 import { CategoryField } from "./CategoryField.tsx";
@@ -112,7 +114,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
   const [posting, setPosting] = useState(false);
   const [lastRates, setLastRates] = useState<Record<string, { amountPaise: number }>>({});
 
-  const { register, control, handleSubmit, setValue, watch, trigger } = useForm<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>({
+  const { register, control, handleSubmit, setValue, watch, getValues, trigger } = useForm<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>({
     defaultValues: {
       partyId: prefill?.partyId ?? params.get("party") ?? "",
       businessDate: prefill?.businessDate ?? todayLocal(),
@@ -129,6 +131,38 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
   const partyName = (partyList ?? []).find((p) => p.id === partyId)?.name ?? "";
   const backTo = prefill?.partyId ?? params.get("party") ? `/parties/${prefill?.partyId ?? params.get("party")}` : "/vouchers/new";
   const { prompt } = useLeaveGuard(step >= 1 && !posted);
+  const stockRows = useStockLive();
+  const stockMap = useMemo(
+    () => new Map((stockRows ?? []).map((b) => [`${b.metal}|${b.name.trim().toLowerCase()}`, b] as const)),
+    [stockRows],
+  );
+  const stockOf = (metal: MetalType, name: string): StockBucket | undefined =>
+    name.trim() ? stockMap.get(`${metal}|${name.trim().toLowerCase()}`) : undefined;
+
+  /** Item pick: set name, prefill the item's default tunch when the field is empty. */
+  const pickItem = (index: number, metal: MetalType, name: string) => {
+    setValue(`lines.${index}.category`, name);
+    const tunchKey = `lines.${index}.agreedTunch` as const;
+    if (!getValues(tunchKey)?.trim()) {
+      void getItemCfg(metal, name).then((cfg) => {
+        if (cfg.defaultTunchScaled !== undefined && !getValues(tunchKey)?.trim()) {
+          setValue(tunchKey, new Decimal(cfg.defaultTunchScaled).div(100).toString());
+        }
+      });
+    }
+  };
+
+  /** Warn-only shorts for SALE review — posting stays allowed. */
+  const shorts = useMemo(
+    () =>
+      kind === "SALE" && preview && stockRows
+        ? checkShortSale(
+            preview.lines.map((l) => ({ metalType: l.metalType, categoryName: l.categoryName, physicalMg: l.physicalMg })),
+            stockRows,
+          )
+        : [],
+    [kind, preview, stockRows],
+  );
 
   useEffect(() => {
     void Promise.all([getLastRate("GOLD"), getLastRate("SILVER")]).then(([g, s]) => {
@@ -280,6 +314,16 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
       <div className={shell}>
         <div className="flex flex-col gap-3">
           <FlowHeader tone={tone} title="Review entry" context={partyName} current={2} labels={["Party", "Goods", "Review"]} />
+          {shorts.length > 0 && (
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+              <div className="font-bold">Short shelf — posting anyway (warn only)</div>
+              {shorts.map((s) => (
+                <div key={`${s.metal}|${s.name}`}>
+                  {s.name}: needs {formatGram(s.needMg)}, shelf {formatGram(s.haveMg)}
+                </div>
+              ))}
+            </div>
+          )}
           <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
             partyName={partyName} posting={posting} error={reviewError}
             onBack={() => { setPreview(null); setStep(1); }} onConfirm={onConfirm} />
@@ -332,6 +376,8 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
               watch={watch}
               setValue={setValue}
               lastRate={lastRates[watch(`lines.${i}.metal`)]}
+              stockOf={stockOf}
+              onPickItem={(name) => pickItem(i, watch(`lines.${i}.metal`), name)}
               onRemove={fields.length > 1 ? () => remove(i) : undefined}
             />
           ))}
@@ -376,13 +422,44 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
   );
 }
 
-function LineCard({ index, kind, register, watch, setValue, lastRate, onRemove }: {
+/** Shelf readout under the item picker. Warn-only on sales — never blocks. */
+function ShelfHint({ kind, metal, category, enteredG, stockOf }: {
+  kind: "SALE" | "PURCHASE";
+  metal: MetalType;
+  category: string;
+  enteredG: string;
+  stockOf: (metal: MetalType, name: string) => StockBucket | undefined;
+}) {
+  if (!category.trim()) return null;
+  const have = stockOf(metal, category);
+  if (!have) {
+    return kind === "SALE"
+      ? <div className="text-xs text-stone-500">Shelf: none yet — first sale posts anyway (warn only).</div>
+      : null;
+  }
+  let short = false;
+  try {
+    short = kind === "SALE" && enteredG.trim() !== "" && parseGramsToMg(enteredG) > have.physicalMg;
+  } catch {
+    short = false;
+  }
+  return (
+    <div className="text-xs text-stone-500">
+      Shelf: {formatGram(have.physicalMg)}{have.pcs !== null ? ` (${have.pcs} pcs)` : ""}
+      {short ? <span className="font-semibold text-amber-700"> · short — posts anyway</span> : null}
+    </div>
+  );
+}
+
+function LineCard({ index, kind, register, watch, setValue, lastRate, stockOf, onPickItem, onRemove }: {
   index: number;
   kind: "SALE" | "PURCHASE";
   register: UseFormRegister<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>;
   watch: UseFormWatch<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>;
   setValue: UseFormSetValue<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>;
   lastRate: { amountPaise: number } | undefined;
+  stockOf: (metal: MetalType, name: string) => StockBucket | undefined;
+  onPickItem: (name: string) => void;
   onRemove?: () => void;
 }) {
   const metal = watch(`lines.${index}.metal`);
@@ -407,7 +484,8 @@ function LineCard({ index, kind, register, watch, setValue, lastRate, onRemove }
             SILVER: <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-400" /> Silver</span>,
           }}
         />
-        <CategoryField metal={metal} value={watch(`lines.${index}.category`)} onPick={(name) => setValue(`lines.${index}.category`, name)} />
+        <CategoryField metal={metal} value={watch(`lines.${index}.category`)} onPick={onPickItem} />
+        <ShelfHint kind={kind} metal={metal} category={watch(`lines.${index}.category`)} enteredG={line.physicalG} stockOf={stockOf} />
         <Field label="Weight" unit={en.units.g}>
           <AmountInput prefix="g" {...register(`lines.${index}.physicalG`)} inputMode="decimal" placeholder="0.000" />
         </Field>

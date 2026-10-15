@@ -19,6 +19,7 @@ import type {
 import type { Table } from "dexie";
 import { uuid } from "../lib/uuid.ts";
 import { recordCategoryUse } from "./categories.ts";
+import { negateTradeStock, tradeRowsFor } from "./stock.ts";
 import { SHOP_ID, db } from "./db.ts";
 import type {
   ConversionRow,
@@ -203,6 +204,11 @@ async function addVoucherParts(
     await dbx.misc_charges.bulkAdd(rows);
   }
   await dbx.ledger_entries.add(toEntryRow(entry, voucher.createdAt));
+  // Shelf moves with the khata: trade lines write stock in the same breath.
+  const tradeRows = tradeRowsFor(voucher);
+  if (tradeRows.length > 0) {
+    await dbx.stock_entries.bulkAdd(tradeRows.map((r) => ({ ...r, id: uuid() })));
+  }
 }
 
 function entryFromDeltas(
@@ -228,6 +234,7 @@ function writeTables(dbx: JewelrDb): Table[] {
     dbx.conversions,
     dbx.manual_deltas,
     dbx.misc_charges,
+    dbx.stock_entries,
     dbx.ledger_entries,
     dbx.app_settings,
   ];
@@ -373,6 +380,8 @@ export async function reverseVoucher(
   const entry = entryFromDeltas(voucher, deltas);
   await dbx.transaction("rw", writeTables(dbx), async () => {
     await addVoucherParts(dbx, voucher, entry);
+    // Reversed trade returns to (or leaves) the shelf.
+    await negateTradeStock(dbx, originalId, voucher.id, voucher.businessDate, voucher.createdAt);
   });
   return { voucher, entry, duplicate: false };
 }
@@ -439,6 +448,7 @@ export async function replaceVoucher(
 
   await dbx.transaction("rw", writeTables(dbx), async () => {
     await addVoucherParts(dbx, revVoucher, revEntry);
+    await negateTradeStock(dbx, originalId, revVoucher.id, revVoucher.businessDate, revVoucher.createdAt);
     await addVoucherParts(dbx, repVoucher, repEntry);
     await rememberCategories(dbx, repVoucher);
   });

@@ -8,6 +8,7 @@ export type {
   MiscChargeRow,
   PartyRow,
   SettlementRow,
+  StockEntryRow,
   VoucherLineRow,
   VoucherRow,
 } from "./db.ts";
@@ -37,6 +38,8 @@ export {
   storedEntriesByVoucher,
 } from "./ledger.ts";
 export type { ActivityFilter, ActivityRow, LedgerFilter, LedgerRow } from "./ledger.ts";
+export { buildStatement, firstOfMonth, getStatement, prevDay } from "./statement.ts";
+export type { Statement, StatementRow } from "./statement.ts";
 export {
   APP_VERSION,
   BACKUP_FORMAT,
@@ -56,3 +59,19 @@ export { getLastRate, setLastRate } from "./settings.ts";
 export type { LastRate } from "./settings.ts";
 export { PRESET_CATEGORIES, addCustom, deleteCustom, getCategorySuggestions, getCustoms, recordCategoryUse, renameCustom } from "./categories.ts";
 export type { CategorySuggestions } from "./categories.ts";
+export {
+  adjustStock,
+  aggregateStock,
+  checkShortSale,
+  clearItemCfg,
+  getItemCfg,
+  getStock,
+  getStockMoves,
+  isLowStock,
+  negateTradeStock,
+  recomputeTradeStock,
+  seedStock,
+  setItemCfg,
+  tradeRowsFor,
+} from "./stock.ts";
+export type { AdjustInput, ItemCfg, SeedItem, ShortLine, StockBucket, StockMove } from "./stock.ts";
