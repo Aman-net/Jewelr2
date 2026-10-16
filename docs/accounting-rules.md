@@ -49,6 +49,11 @@ labour ₹  = round(physicalMg * labourPaisePerGram / 1000)
   on both sides, each shrinking the picked side and growing the other by the
   rate equivalent. Over-conversion posts with a form-level warning, never a
   block.
+- **Weight precision (owner-confirmed 2026-10-16):** silver is whole grams
+  everywhere (half up: 2.3 g → 2 g, 4.5 g → 5 g); gold keeps milligrams
+  (half up past 3 decimals). Applied at snapshot time to physical, fine,
+  settlement, conversion (cash re-derives from the rounded fine), opening,
+  adjustments, and stock — so previews, history, and the PDF all agree.
 - **One live opening per party** (data-layer rule, reversal-aware correction).
 
 Q7 (returns) and Q9 (payment modes) need no calculation rule in v0.1:

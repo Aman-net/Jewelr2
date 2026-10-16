@@ -1,6 +1,7 @@
 import { CALCULATION_VERSION } from "../version.ts";
 import { voucherInputSchema } from "../schemas.ts";
 import { GOLD_QUOTE_MG, SILVER_QUOTE_MG, fineToCash } from "../numeric/metalValue.ts";
+import { roundMetalMg } from "../numeric/rounding.ts";
 import { lineFineMg, selectBillingTunch, settlementFineMg } from "../rules/tunch.ts";
 import { computeLabour } from "../rules/labour.ts";
 import { settlementToDeltas } from "../rules/settlement.ts";
@@ -42,9 +43,11 @@ function snapshotLine(
   line: SalePurchaseLineInput,
 ): SalePurchaseLine {
   const billingTunch = selectBillingTunch(line.recordedTunchScaled, line.agreedTunchScaled);
-  const fineMg = lineFineMg(line.physicalMg, billingTunch);
+  // Canonical weights: silver rounds to whole grams at snapshot time.
+  const physicalMg = roundMetalMg(line.physicalMg, line.metalType);
+  const fineMg = lineFineMg(physicalMg, billingTunch, line.metalType);
   // Labour is cash-only, per piece or per kg, sale and purchase (owner-confirmed).
-  const labourPaise = computeLabour(line.physicalMg, line.itemCount, line.labourMode, line.labourRatePaise);
+  const labourPaise = computeLabour(physicalMg, line.itemCount, line.labourMode, line.labourRatePaise);
   let lineCashPaise = 0;
   if (isCashPriced(line.pricingMode)) {
     if (line.rateAmountPaise === undefined || line.rateUnit === undefined) {
@@ -57,6 +60,7 @@ function snapshotLine(
     ...line,
     id: `${voucherId}#L${index}`,
     voucherId,
+    physicalMg,
     fineMg,
     labourPaise,
     lineCashPaise,
@@ -66,21 +70,34 @@ function snapshotLine(
 function snapshotSettlement(s: SettlementInput): SettlementSnapshot {
   return {
     ...s,
+    goldPhysicalMg: s.goldPhysicalMg !== undefined ? roundMetalMg(s.goldPhysicalMg, "GOLD") : undefined,
+    silverPhysicalMg: s.silverPhysicalMg !== undefined ? roundMetalMg(s.silverPhysicalMg, "SILVER") : undefined,
     goldFineMg:
       s.goldPhysicalMg && s.goldTunchScaled !== undefined
-        ? settlementFineMg(s.goldPhysicalMg, s.goldTunchScaled)
+        ? settlementFineMg(s.goldPhysicalMg, s.goldTunchScaled, "GOLD")
         : 0,
     silverFineMg:
       s.silverPhysicalMg && s.silverTunchScaled !== undefined
-        ? settlementFineMg(s.silverPhysicalMg, s.silverTunchScaled)
+        ? settlementFineMg(s.silverPhysicalMg, s.silverTunchScaled, "SILVER")
         : 0,
   };
 }
 
 function snapshotConversion(c: ConversionInput): ConversionInput & { cashPaise: number } {
   assertRateUnitMatches(c.metalType, c.rateUnit);
-  const cashPaise = fineToCash(c.fineMg, c.rateAmountPaise, quoteMgFor(c.rateUnit));
-  return { ...c, cashPaise };
+  // Cash derives from the rounded fine so the immutability guard stays exact.
+  const fineMg = roundMetalMg(c.fineMg, c.metalType);
+  const cashPaise = fineToCash(fineMg, c.rateAmountPaise, quoteMgFor(c.rateUnit));
+  return { ...c, fineMg, cashPaise };
+}
+
+/** Manual money/metal balances: silver rounds to whole grams at snapshot time. */
+function snapshotManual(d: BalanceDelta): BalanceDelta {
+  return {
+    cashPaise: d.cashPaise,
+    goldFineMg: roundMetalMg(d.goldFineMg, "GOLD"),
+    silverFineMg: roundMetalMg(d.silverFineMg, "SILVER"),
+  };
 }
 
 /**
@@ -130,8 +147,8 @@ export function buildVoucher(input: VoucherInput): Voucher {
     lines,
     settlement: parsed.settlement ? snapshotSettlement(parsed.settlement) : null,
     conversion: parsed.conversion ? snapshotConversion(parsed.conversion) : null,
-    opening: parsed.opening ? { ...parsed.opening } : null,
-    adjustment: parsed.adjustment ? { ...parsed.adjustment } : null,
+    opening: parsed.opening ? snapshotManual(parsed.opening) : null,
+    adjustment: parsed.adjustment ? snapshotManual(parsed.adjustment) : null,
     misc,
     createdAt: parsed.createdAt,
   };

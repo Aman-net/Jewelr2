@@ -1,7 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
-import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
+import { Card, Page } from "../../components/ui/Card.tsx";
 import { Button } from "../../components/ui/Button.tsx";
 import { Field, Input } from "../../components/ui/Field.tsx";
 import { LoadingRow } from "../../components/ui/Loader.tsx";
@@ -56,15 +56,25 @@ function Amt({ value, text, getTone }: { value: number; text: string; getTone: s
   );
 }
 
-/** Cash / Gold / Silver move strip, always all three columns, metal-tinted. */
-function MoveStrip({ cash, gold, silver }: { cash: number; gold: number; silver: number }) {
+/** Cash / Gold / Silver move strip. Absent metals drop out statement-wide. */
+function MoveStrip({ cash, gold, silver, showGold = true, showSilver = true }: {
+  cash: number;
+  gold: number;
+  silver: number;
+  showGold?: boolean;
+  showSilver?: boolean;
+}) {
   const cells: { label: string; bg: string; node: React.ReactNode }[] = [
     { label: "Cash", bg: "bg-emerald-50", node: <Amt value={cash} text={formatINR(Math.abs(cash))} getTone="text-emerald-700" /> },
-    { label: "Gold", bg: "bg-amber-50", node: <Amt value={gold} text={formatGram(Math.abs(gold))} getTone="text-amber-700" /> },
-    { label: "Silver", bg: "bg-slate-100", node: <Amt value={silver} text={formatGram(Math.abs(silver))} getTone="text-slate-600" /> },
+    ...(showGold
+      ? [{ label: "Gold", bg: "bg-amber-50", node: <Amt value={gold} text={formatGram(Math.abs(gold))} getTone="text-amber-700" /> }]
+      : []),
+    ...(showSilver
+      ? [{ label: "Silver", bg: "bg-slate-100", node: <Amt value={silver} text={formatGram(Math.abs(silver))} getTone="text-slate-600" /> }]
+      : []),
   ];
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className={cn("grid gap-2", cells.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
       {cells.map((c) => (
         <div key={c.label} className={cn("rounded-xl px-2 py-1.5 text-center", c.bg)}>
           <div className="text-[10px] font-semibold uppercase tracking-wide text-stone-400">{c.label}</div>
@@ -158,19 +168,74 @@ function EntryDetails({ v }: { v: Voucher }) {
   );
 }
 
-function EntryBlock({ row, voucher, serial }: { row: StatementRow; voucher?: Voucher; serial: number }) {
+/** Opening / period / closing box: title plus the same metal strip. */
+function DuesBox({ title, cash, gold, silver, metals, amber, children }: {
+  title: string;
+  cash: number;
+  gold: number;
+  silver: number;
+  metals: { gold: boolean; silver: boolean };
+  amber?: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <Card className={amber ? "border-amber-200 bg-amber-50/60" : undefined}>
+      <div className={amber
+        ? "mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-800"
+        : "mb-2 text-[11px] font-semibold uppercase tracking-widest text-stone-500"}>
+        {title}
+      </div>
+      <MoveStrip cash={cash} gold={gold} silver={silver} showGold={metals.gold} showSilver={metals.silver} />
+      {children}
+    </Card>
+  );
+}
+
+/** Gross in/out volumes under the net period move. */
+function GrossLine({ grossIn, grossOut, metals }: {
+  grossIn: { cashPaise: number; goldFineMg: number; silverFineMg: number };
+  grossOut: { cashPaise: number; goldFineMg: number; silverFineMg: number };
+  metals: { gold: boolean; silver: boolean };
+}) {
+  const parts = [
+    `cash in ${formatINR(grossIn.cashPaise)} · out ${formatINR(Math.abs(grossOut.cashPaise))}`,
+    metals.gold ? `gold in ${formatGram(grossIn.goldFineMg)} · out ${formatGram(Math.abs(grossOut.goldFineMg))}` : "",
+    metals.silver ? `silver in ${formatGram(grossIn.silverFineMg)} · out ${formatGram(Math.abs(grossOut.silverFineMg))}` : "",
+  ].filter(Boolean);
+  return <div className="mt-2 text-[11px] text-stone-500">{parts.join(" · ")}</div>;
+}
+
+function EntryBlock({ row, voucher, metals }: {
+  row: StatementRow;
+  voucher?: Voucher;
+  metals: { gold: boolean; silver: boolean };
+}) {
+  const netZero = row.pair !== undefined && row.cashDeltaPaise === 0 && row.goldFineDeltaMg === 0 && row.silverFineDeltaMg === 0;
   return (
     <div className={cn("rounded-2xl border border-stone-200 border-l-4 bg-white px-3 py-2.5 shadow-sm", TYPE_ACCENT[row.type] ?? "border-l-stone-300")}>
       <div className="flex items-center gap-2">
-        <span className="text-xs font-medium tabular-nums text-stone-400">#{serial}</span>
+        <span className="text-xs font-medium tabular-nums text-stone-400">
+          #{row.serial}{row.pair ? `, #${row.pair.otherSerial}` : ""}
+        </span>
         <span className={cn("rounded px-1.5 py-0.5 text-[11px] font-bold", TYPE_BADGE[row.type] ?? "bg-stone-100 text-stone-600")}>
           {TYPE_WORDS[row.type] ?? row.type}
         </span>
         {row.referenceNumber ? <span className="text-xs text-stone-500">Bill {row.referenceNumber}</span> : null}
         <Link to={`/vouchers/${row.voucherId}`} className="bill-row ml-auto shrink-0 text-xs font-medium text-amber-800">Open ›</Link>
       </div>
+      {row.pair ? (
+        <div className="mt-1 text-xs italic text-stone-500">
+          and its reversal{netZero ? " · no net effect" : ""}{row.pair.reason ? ` — ${row.pair.reason}` : ""}
+        </div>
+      ) : null}
       <div className="mt-2">
-        <MoveStrip cash={row.cashDeltaPaise} gold={row.goldFineDeltaMg} silver={row.silverFineDeltaMg} />
+        <MoveStrip
+          cash={row.cashDeltaPaise}
+          gold={row.goldFineDeltaMg}
+          silver={row.silverFineDeltaMg}
+          showGold={metals.gold}
+          showSilver={metals.silver}
+        />
       </div>
       {voucher ? <EntryDetails v={voucher} /> : null}
     </div>
@@ -217,12 +282,8 @@ export function BillPage() {
       list.push(r);
       byDay.set(r.businessDate, list);
     }
-    // Running serials across the statement, like paper row numbers.
-    let n = 0;
-    return [...byDay.entries()].map(([date, list]) => ({
-      date,
-      rows: list.map((r) => ({ r, serial: ++n })),
-    }));
+    // Running serials live on the rows (pairs consume two numbers).
+    return [...byDay.entries()].map(([date, list]) => ({ date, rows: list }));
   }, [data]);
 
   if (party === undefined) return <Page title=""><LoadingRow label="Loading bill…" /></Page>;
@@ -245,21 +306,25 @@ export function BillPage() {
         import("@react-pdf/renderer"),
         import("./StatementPdf.tsx"),
       ]);
-      let n = 0;
       const days: DocDay[] = groups.map(({ date, rows }) => {
-        const docRows = rows.map(({ r }) => {
-          n += 1;
+        const docRows = rows.map((r) => {
           const v = data?.vouchers.get(r.voucherId);
           return {
-            serial: n,
-            head: doc.rowHead(r.type, v, n),
-            details: v ? doc.buildDocDetails(v) : [],
+            sno: r.pair ? `#${r.serial}, #${r.pair.otherSerial}` : `#${r.serial}`,
+            head: doc.rowHead(r.type, v),
+            details: [
+              ...(r.pair ? [doc.pairNote(r.cashDeltaPaise, r.goldFineDeltaMg, r.silverFineDeltaMg, r.pair.reason)] : []),
+              ...(v ? doc.buildDocDetails(v) : []),
+            ],
             cash: r.cashDeltaPaise,
             gold: r.goldFineDeltaMg,
             silver: r.silverFineDeltaMg,
+            balCash: r.balCashPaise,
+            balGold: r.balGoldFineMg,
+            balSilver: r.balSilverFineMg,
           };
         });
-        const last = rows[rows.length - 1]!.r;
+        const last = rows[rows.length - 1]!;
         return { date: formatDate(date), rows: docRows, balCash: last.balCashPaise, balGold: last.balGoldFineMg, balSilver: last.balSilverFineMg };
       });
       const to = applied.to || todayLocal();
@@ -278,12 +343,14 @@ export function BillPage() {
           days={days}
           entryCount={statement.rows.length}
           totals={statement.totals}
+          grossIn={statement.grossIn}
+          grossOut={statement.grossOut}
           closing={statement.closing}
           closingLabel={`CLOSING BALANCE AS ON ${formatDate(to).toUpperCase()}`}
-          hasGold={statement.rows.some((r) => r.goldFineDeltaMg !== 0)}
+          metals={statement.metals}
         />,
       ).toBlob();
-      const filename = `khata-${party.name.replace(/[^\w]+/g, "-")}-${to}.pdf`;
+      const filename = `Jewelr-${party.name.replace(/[^\w]+/g, "-")}-${applied.from || "Beginning"}-${to}.pdf`;
       const file = new File([blob], filename, { type: "application/pdf" });
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: filename });
@@ -346,16 +413,13 @@ export function BillPage() {
             <div className="mt-2 text-xs text-stone-400">Generated {generatedAt}</div>
           </div>
 
-          <Card>
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-stone-500">
-              Opening · {applied.from ? `due before ${formatDate(applied.from)}` : "start"}
-            </div>
-            <BalanceGrid
-              cashPaise={statement.opening.cashPaise}
-              goldFineMg={statement.opening.goldFineMg}
-              silverFineMg={statement.opening.silverFineMg}
-            />
-          </Card>
+          <DuesBox
+            title={applied.from ? `Opening balance · before ${formatDate(applied.from)}` : "Opening balance · start"}
+            cash={statement.opening.cashPaise}
+            gold={statement.opening.goldFineMg}
+            silver={statement.opening.silverFineMg}
+            metals={statement.metals}
+          />
 
           <div className="px-1 text-[11px] text-stone-500">
             <b className="text-emerald-700">+</b> adds to due · <b className="text-red-700">−</b> reduces due · <b>—</b> untouched
@@ -371,25 +435,30 @@ export function BillPage() {
                 <span className="h-px flex-1 bg-stone-200" />
                 <span className="text-[11px] font-medium tabular-nums text-stone-400">{rows.length}</span>
               </div>
-              {rows.map(({ r, serial }) => (
-                <EntryBlock key={r.voucherId} row={r} voucher={data?.vouchers.get(r.voucherId)} serial={serial} />
+              {rows.map((r) => (
+                <EntryBlock key={r.voucherId} row={r} voucher={data?.vouchers.get(r.voucherId)} metals={statement.metals} />
               ))}
             </div>
           ))}
 
-          <Card>
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-stone-500">Period move</div>
-            <MoveStrip cash={statement.totals.cashPaise} gold={statement.totals.goldFineMg} silver={statement.totals.silverFineMg} />
-          </Card>
+          <DuesBox
+            title="Period move · net"
+            cash={statement.totals.cashPaise}
+            gold={statement.totals.goldFineMg}
+            silver={statement.totals.silverFineMg}
+            metals={statement.metals}
+          >
+            <GrossLine grossIn={statement.grossIn} grossOut={statement.grossOut} metals={statement.metals} />
+          </DuesBox>
 
-          <Card className="border-amber-200 bg-amber-50/60">
-            <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-800">Closing due — collect or pay</div>
-            <BalanceGrid
-              cashPaise={statement.closing.cashPaise}
-              goldFineMg={statement.closing.goldFineMg}
-              silverFineMg={statement.closing.silverFineMg}
-            />
-          </Card>
+          <DuesBox
+            title="Closing due — collect or pay"
+            cash={statement.closing.cashPaise}
+            gold={statement.closing.goldFineMg}
+            silver={statement.closing.silverFineMg}
+            metals={statement.metals}
+            amber
+          />
 
           <div className="bill-controls flex flex-col gap-2">
             <div className="flex gap-2">

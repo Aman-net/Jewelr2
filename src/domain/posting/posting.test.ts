@@ -312,15 +312,15 @@ describe("RECEIPT / PAYMENT / CONVERSION / OPENING / ADJUSTMENT", () => {
     expect(voucherDeltas(v)).toEqual({ cashPaise: 500_000, goldFineMg: 20_000, silverFineMg: 0 });
   });
 
-  it("ADJUSTMENT posts an explicit manual delta", () => {
+  it("ADJUSTMENT posts an explicit manual delta (silver rounds to grams)", () => {
     const v = buildVoucher(
       base({
         id: "dddddddd-dddd-4d33-8ddd-dddddddddddd",
         type: "ADJUSTMENT",
-        adjustment: { cashPaise: -500, goldFineMg: 0, silverFineMg: 100 },
+        adjustment: { cashPaise: -500, goldFineMg: 0, silverFineMg: 1500 },
       }),
     );
-    expect(voucherDeltas(v)).toEqual({ cashPaise: -500, goldFineMg: 0, silverFineMg: 100 });
+    expect(voucherDeltas(v)).toEqual({ cashPaise: -500, goldFineMg: 0, silverFineMg: 2000 });
   });
 });
 
@@ -391,5 +391,45 @@ describe("reversal, rate immutability, as-of", () => {
       settlement: { cashPaise: 500 },
     });
     expect(buildVoucher(input)).toEqual(buildVoucher(input));
+  });
+
+  it("silver snapshots round to whole grams (physical, fine, conversion)", () => {
+    const sale = buildVoucher(
+      base({
+        id: "77777777-7777-4777-8777-777777777777",
+        type: "SALE",
+        lines: [
+          {
+            metalType: "SILVER",
+            categoryName: "Payal",
+            physicalMg: 25_500,
+            agreedTunchScaled: 10_000,
+            pricingMode: "METAL_OPEN",
+          },
+        ],
+      }),
+    );
+    expect(sale.lines[0]?.physicalMg).toBe(26_000);
+    expect(sale.lines[0]?.fineMg).toBe(26_000);
+    expect(voucherDeltas(sale)).toEqual({ cashPaise: 0, goldFineMg: 0, silverFineMg: 26_000 });
+
+    // Conversion cash re-derives from the rounded fine (guard stays exact).
+    const conv = buildVoucher(
+      base({
+        id: "88888888-8888-4888-8888-888888888888",
+        type: "CONVERSION",
+        conversion: {
+          direction: "METAL_TO_CASH",
+          metalType: "SILVER",
+          side: "PARTY_OWES",
+          fineMg: 1500,
+          rateAmountPaise: 20_000_000,
+          rateUnit: "SILVER_PER_KG",
+        },
+      }),
+    );
+    // 1.5 g -> 2 g; cash = 2000 mg @ Rs 2,00,000/kg = Rs 400.
+    expect(conv.conversion?.fineMg).toBe(2000);
+    expect(conv.conversion?.cashPaise).toBe(40_000);
   });
 });

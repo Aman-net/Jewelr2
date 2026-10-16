@@ -1,5 +1,6 @@
 import { tradeMoves } from "../domain/index.ts";
 import type { TradeMove, Voucher } from "../domain/index.ts";
+import { roundMetalMg } from "../domain/numeric/rounding.ts";
 import { uuid } from "../lib/uuid.ts";
 import { db } from "./db.ts";
 import type { JewelrDb, StockEntryRow } from "./db.ts";
@@ -138,15 +139,16 @@ export async function seedStock(
   const rows = items.map((it) => {
     if (!it.name.trim()) throw new Error("Item name is required");
     if (it.physicalMg <= 0) throw new Error(`${it.name}: weight must be positive`);
+    const physicalMg = roundMetalMg(it.physicalMg, it.metal);
     return {
       id: uuid(),
       voucherId: null,
       metal: it.metal,
       itemName: it.name.trim(),
-      physicalDeltaMg: it.physicalMg,
+      physicalDeltaMg: physicalMg,
       pcsDelta: it.pcs ?? 0,
       hasPcs: it.pcs !== undefined,
-      fineDeltaMg: Math.round((it.physicalMg * it.tunchScaled) / 10_000),
+      fineDeltaMg: roundMetalMg(Math.round((physicalMg * it.tunchScaled) / 10_000), it.metal),
       businessDate,
       reason: reason?.trim() || "Opening count",
       createdAt,
@@ -173,15 +175,17 @@ export async function adjustStock(input: AdjustInput, dbx: JewelrDb = db): Promi
   if (!input.name.trim()) throw new Error("Item name is required");
   if (!input.reason.trim()) throw new Error("A reason is required for stock adjustments");
   if (input.physicalDeltaMg === 0) throw new Error("Adjustment quantity cannot be zero");
+  const physicalDeltaMg = roundMetalMg(input.physicalDeltaMg, input.metal);
+  if (physicalDeltaMg === 0) throw new Error("Adjustment is below 1 g — silver rounds to whole grams");
   const row: StockEntryRow = {
     id: uuid(),
     voucherId: null,
     metal: input.metal,
     itemName: input.name.trim(),
-    physicalDeltaMg: input.physicalDeltaMg,
+    physicalDeltaMg,
     pcsDelta: input.pcsDelta ?? 0,
     hasPcs: input.pcsDelta !== undefined,
-    fineDeltaMg: Math.round((Math.abs(input.physicalDeltaMg) * input.tunchScaled) / 10_000) * Math.sign(input.physicalDeltaMg),
+    fineDeltaMg: roundMetalMg(Math.round((Math.abs(physicalDeltaMg) * input.tunchScaled) / 10_000), input.metal) * Math.sign(physicalDeltaMg),
     businessDate: input.businessDate,
     reason: input.reason.trim(),
     createdAt: new Date().toISOString(),

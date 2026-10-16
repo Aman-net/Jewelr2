@@ -15,7 +15,7 @@ import type { BalanceDelta, PaymentMode, Voucher } from "../../domain/index.ts";
 import { usePartyList } from "../../hooks/useLive.ts";
 import { en } from "../../i18n/en.ts";
 import { formatGram, parseGramsToMg, parsePercentToScaled, parseRupeesToPaise, todayLocal } from "../../lib/format.ts";
-import { fineFromPhysical } from "../../domain/numeric/tunch.ts";
+import { settlementFineMg } from "../../domain/rules/tunch.ts";
 import { uuid } from "../../lib/uuid.ts";
 import { PartyPicker } from "./fields.tsx";
 import { Review } from "./Review.tsx";
@@ -36,10 +36,10 @@ interface Form {
 const TUNCH_SHORTCUTS = ["70", "75", "80", "85", "91.6", "100"];
 
 /** Live fine preview for one metal: weight × tunch → fine, or null when incomplete. */
-function metalPreview(weightG: string, tunch: string): string | null {
+function metalPreview(metal: "GOLD" | "SILVER", weightG: string, tunch: string): string | null {
   try {
     if (!weightG.trim() || !tunch.trim()) return null;
-    const fine = fineFromPhysical(parseGramsToMg(weightG), parsePercentToScaled(tunch));
+    const fine = settlementFineMg(parseGramsToMg(weightG), parsePercentToScaled(tunch), metal);
     return `→ ${formatGram(fine)} fine`;
   } catch {
     return null;
@@ -255,9 +255,9 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
                       </div>
                       <Input {...register("goldTunch")} inputMode="decimal" placeholder="Or type exact %" className="mt-2" />
                     </Field>
-                    {metalPreview(goldG, goldTunch) ? (
+                    {metalPreview("GOLD", goldG, goldTunch) ? (
                       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
-                        {metalPreview(goldG, goldTunch)}
+                        {metalPreview("GOLD", goldG, goldTunch)}
                       </div>
                     ) : null}
                   </div>
@@ -276,9 +276,9 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
                       </div>
                       <Input {...register("silverTunch")} inputMode="decimal" placeholder="Or type exact %" className="mt-2" />
                     </Field>
-                    {metalPreview(silverG, silverTunch) ? (
+                    {metalPreview("SILVER", silverG, silverTunch) ? (
                       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
-                        {metalPreview(silverG, silverTunch)}
+                        {metalPreview("SILVER", silverG, silverTunch)}
                       </div>
                     ) : null}
                   </div>

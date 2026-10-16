@@ -13,7 +13,8 @@ import { SuccessView } from "../../components/ui/Success.tsx";
 import { checkShortSale, getItemCfg, getLastRate, postVoucher, setLastRate } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import { fineToCash, GOLD_QUOTE_MG, SILVER_QUOTE_MG } from "../../domain/numeric/metalValue.ts";
-import { fineFromPhysical } from "../../domain/numeric/tunch.ts";
+import { lineFineMg } from "../../domain/rules/tunch.ts";
+import { roundMetalMg } from "../../domain/numeric/rounding.ts";
 import { labourPerKg, labourPerPiece } from "../../domain/numeric/labour.ts";
 import type { BalanceDelta, LabourMode, MetalType, PricingMode, Voucher } from "../../domain/index.ts";
 import type { StockBucket } from "../../data/index.ts";
@@ -77,7 +78,7 @@ function lineLabour(l: LineForm): number {
       if (!count || count <= 0) return 0;
       return labourPerPiece(count, rate);
     }
-    return labourPerKg(parseGramsToMg(l.physicalG), rate);
+    return labourPerKg(roundMetalMg(parseGramsToMg(l.physicalG), l.metal), rate);
   } catch {
     return 0;
   }
@@ -87,7 +88,7 @@ function lineHint(l: LineForm, kind: "SALE" | "PURCHASE"): string | null {
   try {
     const physicalMg = parseGramsToMg(l.physicalG);
     if (physicalMg <= 0 || !l.agreedTunch.trim()) return null;
-    const fine = fineFromPhysical(physicalMg, parsePercentToScaled(l.agreedTunch));
+    const fine = lineFineMg(physicalMg, parsePercentToScaled(l.agreedTunch), l.metal);
     const who = kind === "SALE" ? "Party owes" : "You owe";
     const labour = lineLabour(l);
     if (l.mode === "METAL_OPEN") {

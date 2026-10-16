@@ -11,6 +11,7 @@ import { SuccessView } from "../../components/ui/Success.tsx";
 import { getLastRate, postVoucher, setLastRate } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import { GOLD_QUOTE_MG, SILVER_QUOTE_MG, cashToGoldFine, cashToSilverFine, fineToCash } from "../../domain/numeric/metalValue.ts";
+import { roundMetalMg } from "../../domain/numeric/rounding.ts";
 import type { BalanceDelta, ConversionDirection, ConversionSide, MetalType, Voucher } from "../../domain/index.ts";
 import { useBalancesLive, usePartyList } from "../../hooks/useLive.ts";
 import { en } from "../../i18n/en.ts";
@@ -282,7 +283,7 @@ function cashToFineHint(metal: MetalType, cashRaw: string, rateRaw: string): str
     const rate = parseRupeesToPaise(rateRaw);
     const cash = parseRupeesToPaise(cashRaw);
     if (cash <= 0) return null;
-    const fine = metal === "GOLD" ? cashToGoldFine(cash, rate) : cashToSilverFine(cash, rate);
+    const fine = roundMetalMg(metal === "GOLD" ? cashToGoldFine(cash, rate) : cashToSilverFine(cash, rate), metal);
     return `→ becomes fine ${formatGram(fine)} ${metal === "GOLD" ? "gold" : "silver"}`;
   } catch {
     return null;
@@ -294,7 +295,7 @@ function prefillCash(prefill: Partial<Form>): string {
   try {
     if (prefill.direction !== "CASH_TO_METAL" || !prefill.fineG || !prefill.rate || !prefill.metal) return "";
     const quote = prefill.metal === "GOLD" ? GOLD_QUOTE_MG : SILVER_QUOTE_MG;
-    const cashPaise = fineToCash(parseGramsToMg(prefill.fineG), parseRupeesToPaise(prefill.rate), quote);
+    const cashPaise = fineToCash(roundMetalMg(parseGramsToMg(prefill.fineG), prefill.metal), parseRupeesToPaise(prefill.rate), quote);
     return String(cashPaise / 100);
   } catch {
     return "";

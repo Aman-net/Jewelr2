@@ -67,7 +67,7 @@ describe("statement", () => {
     expect(st.opening).toEqual({ cashPaise: -2_000, goldFineMg: 0, silverFineMg: 0 });
   });
 
-  it("reversals dated in-range rewrite the statement like the khata", async () => {
+  it("reversals collapse into their original: one paper row, net effect", async () => {
     const sale = await postVoucher(
       {
         type: "SALE",
@@ -87,9 +87,34 @@ describe("statement", () => {
     );
     await reverseVoucher(sale.voucher.id, "wrong weight", {}, tdb);
     const st = await getStatement(partyId, "2026-01-01", "2026-01-31", tdb);
-    expect(st.rows).toHaveLength(2);
+    expect(st.rows).toHaveLength(1);
+    expect(st.rows[0]).toMatchObject({
+      serial: 1,
+      cashDeltaPaise: 0,
+      silverFineDeltaMg: 0,
+      pair: { otherSerial: 2, reason: "wrong weight" },
+    });
     expect(st.totals).toEqual({ cashPaise: 0, goldFineMg: 0, silverFineMg: 0 });
     expect(st.closing).toEqual({ cashPaise: 0, goldFineMg: 0, silverFineMg: 0 });
+    // Gross volumes still record both legs (Khatabook-style in/out).
+    expect(st.grossIn).toEqual({ cashPaise: 0, goldFineMg: 0, silverFineMg: 80_000 });
+    expect(st.grossOut).toEqual({ cashPaise: 0, goldFineMg: 0, silverFineMg: -80_000 });
+  });
+
+  it("tracks serials, gross volumes, and metal presence", async () => {
+    await postVoucher(
+      { type: "RECEIPT", partyId, businessDate: "2026-01-12", settlement: { cashPaise: 1_000 } },
+      tdb,
+    );
+    await postVoucher(
+      { type: "PAYMENT", partyId, businessDate: "2026-01-13", settlement: { cashPaise: 400 } },
+      tdb,
+    );
+    const st = await getStatement(partyId, "2026-01-01", "2026-01-31", tdb);
+    expect(st.rows.map((r) => r.serial)).toEqual([1, 2]);
+    expect(st.grossIn).toEqual({ cashPaise: 400, goldFineMg: 0, silverFineMg: 0 });
+    expect(st.grossOut).toEqual({ cashPaise: -1_000, goldFineMg: 0, silverFineMg: 0 });
+    expect(st.metals).toEqual({ gold: false, silver: false });
   });
 
   it("rejects inverted ranges; whole-khata mode starts from zero", async () => {
