@@ -40,6 +40,8 @@ export {
 export type { ActivityFilter, ActivityRow, LedgerFilter, LedgerRow } from "./ledger.ts";
 export { buildStatement, firstOfMonth, getStatement, prevDay } from "./statement.ts";
 export type { Statement, StatementRow } from "./statement.ts";
+export { getAllDuesSplits, getDuesSplit } from "./dues.ts";
+export type { DuesSplit } from "./dues.ts";
 export {
   APP_VERSION,
   BACKUP_FORMAT,

@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button } from "../../components/ui/Button.tsx";
 import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
+import { cn } from "../../lib/cn.ts";
 import { DuesLine } from "../../components/ui/Dues.tsx";
 import { EmptyState } from "../../components/ui/Bits.tsx";
 import { PartyAvatar } from "../../components/ui/PartyAvatar.tsx";
@@ -12,24 +13,40 @@ import { Input } from "../../components/ui/Field.tsx";
 import { InstallCard } from "./InstallCard.tsx";
 import { StockHomeCard } from "../stock/Stock.tsx";
 import { listActivity } from "../../data/index.ts";
+import { getAllDuesSplits } from "../../data/index.ts";
 import { useAllBalancesLive, usePartyList } from "../../hooks/useLive.ts";
 import { dayLabel, formatGram, formatINR } from "../../lib/format.ts";
 
 export function HomePage() {
   const balances = useAllBalancesLive();
+  const splits = useLiveQuery(() => getAllDuesSplits(), []);
   const parties = usePartyList();
   const recent = useLiveQuery(() => listActivity({ limit: 6 }), []);
   const [q, setQ] = useState("");
-
+  const [duesView, setDuesView] = useState<"combined" | "sale" | "purchase">("combined");
   const query = q.trim().toLowerCase();
   const partyRows = (parties ?? [])
     .map((p) => ({ p, b: balances?.[p.id] ?? { cashPaise: 0, goldFineMg: 0, silverFineMg: 0 } }))
     .filter(({ p }) => !query || p.name.toLowerCase().includes(query) || (p.mobile ?? "").includes(query))
     .sort((a, b) => Math.abs(b.b.cashPaise) - Math.abs(a.b.cashPaise));
 
-  const netCash = Object.values(balances ?? {}).reduce((n, b) => n + b.cashPaise, 0);
-  const netGold = Object.values(balances ?? {}).reduce((n, b) => n + b.goldFineMg, 0);
-  const netSilver = Object.values(balances ?? {}).reduce((n, b) => n + b.silverFineMg, 0);
+  // Market-wide buckets: what customers owe you (sale) vs what you owe
+  // suppliers (purchase). Netting them hides both flows — hence the toggle.
+  const market = { cashPaise: 0, goldFineMg: 0, silverFineMg: 0 };
+  const marketSale = { cashPaise: 0, goldFineMg: 0, silverFineMg: 0 };
+  const marketPurchase = { cashPaise: 0, goldFineMg: 0, silverFineMg: 0 };
+  for (const s of Object.values(splits ?? {})) {
+    market.cashPaise += s.combined.cashPaise;
+    market.goldFineMg += s.combined.goldFineMg;
+    market.silverFineMg += s.combined.silverFineMg;
+    marketSale.cashPaise += s.sale.cashPaise;
+    marketSale.goldFineMg += s.sale.goldFineMg;
+    marketSale.silverFineMg += s.sale.silverFineMg;
+    marketPurchase.cashPaise += s.purchase.cashPaise;
+    marketPurchase.goldFineMg += s.purchase.goldFineMg;
+    marketPurchase.silverFineMg += s.purchase.silverFineMg;
+  }
+  const hero = duesView === "combined" ? market : duesView === "sale" ? marketSale : marketPurchase;
 
   return (
     <Page
@@ -39,9 +56,37 @@ export function HomePage() {
     >
       <div className="rounded-3xl bg-stone-900 p-5 text-white shadow-md">
         <div className="mb-3 text-xs font-semibold uppercase tracking-widest text-stone-400">
-          {netCash >= 0 ? "Market owes you" : "You owe market"}
+          {hero.cashPaise >= 0 ? "Market owes you" : "You owe market"}
         </div>
-        <BalanceGrid cashPaise={netCash} goldFineMg={netGold} silverFineMg={netSilver} dark />
+        <BalanceGrid cashPaise={hero.cashPaise} goldFineMg={hero.goldFineMg} silverFineMg={hero.silverFineMg} dark />
+        {duesView !== "combined" && (
+          <div className="mt-2 text-[11px] text-stone-400">
+            {duesView === "sale"
+              ? "What customers owe you — sales minus received."
+              : "What you owe suppliers — purchases minus paid."}
+          </div>
+        )}
+        <div className="mt-3 flex gap-1.5">
+          {(
+            [
+              ["combined", "Total"],
+              ["sale", "Customers"],
+              ["purchase", "Suppliers"],
+            ] as const
+          ).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setDuesView(v)}
+              className={cn(
+                "flex-1 rounded-full px-2 py-1.5 text-xs font-bold",
+                duesView === v ? "bg-amber-400 text-stone-900" : "bg-white/10 text-stone-300",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <Link to="/summary" className="mt-3 inline-block text-xs font-medium text-amber-300">
           Full summary ›
         </Link>

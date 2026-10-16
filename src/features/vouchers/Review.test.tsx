@@ -41,7 +41,8 @@ describe("Review", () => {
       />,
     );
     expect(screen.getByText(/Sharma/)).toBeTruthy();
-    expect(screen.getAllByText("80 g")).toHaveLength(2); // trio grid + line breakdown
+    expect(screen.getByText("80 g")).toBeTruthy(); // line breakdown (unsigned weight)
+    expect(screen.getByText("+80 g")).toBeTruthy(); // signed dues total: + means you get
     expect(screen.getByText("Confirm & post")).toBeTruthy();
   });
 
