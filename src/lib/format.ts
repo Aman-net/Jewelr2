@@ -31,16 +31,16 @@ export function formatRate(ratePaise: number, unit: "GOLD_PER_10G" | "SILVER_PER
   return `${formatINR(ratePaise)} per ${unit === "GOLD_PER_10G" ? "10 g" : "kg"}`;
 }
 
-/** Parse user-typed grams ("12.345") → integer mg. Throws on invalid. */
+/** Parse user-typed grams ("12.345") → integer mg. Throws on invalid. Commas tolerated (live-grouped input). */
 export function parseGramsToMg(raw: string): number {
-  const v = new Decimal(raw.trim());
+  const v = new Decimal(raw.trim().replace(/,/g, ""));
   if (!v.isFinite() || v.isNegative()) throw new Error(`Invalid weight: ${raw}`);
   return v.mul(1000).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
 }
 
-/** Parse rupees ("1500.50") → integer paise. */
+/** Parse rupees ("1500.50") → integer paise. Commas tolerated (live-grouped input). */
 export function parseRupeesToPaise(raw: string, allowNegative = false): number {
-  const v = new Decimal(raw.trim());
+  const v = new Decimal(raw.trim().replace(/,/g, ""));
   if (!v.isFinite() || (!allowNegative && v.isNegative())) throw new Error(`Invalid amount: ${raw}`);
   return v.mul(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
 }

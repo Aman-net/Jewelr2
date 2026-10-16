@@ -5,7 +5,7 @@ import type { JewelrDb } from "./db.ts";
 import { uuid } from "../lib/uuid.ts";
 import { createParty } from "./parties.ts";
 import { postVoucher, reverseVoucher } from "./vouchers.ts";
-import { buildStatement, firstOfMonth, getStatement, prevDay } from "./statement.ts";
+import { buildStatement, firstOfMonth, getStatement, listGeneratedBills, logGeneratedBill, prevDay } from "./statement.ts";
 
 let tdb: JewelrDb;
 let partyId: string;
@@ -122,5 +122,19 @@ describe("statement", () => {
     const st = await getStatement(partyId, "", "2026-01-31", tdb);
     expect(st.opening).toEqual({ cashPaise: 0, goldFineMg: 0, silverFineMg: 0 });
     expect(buildStatement(partyId, "", "", { cashPaise: 0, goldFineMg: 0, silverFineMg: 0 }, []).rows).toEqual([]);
+  });
+
+  it("logs generated bills newest-first, info only", async () => {
+    await logGeneratedBill({ partyId, from: "2026-01-01", to: "2026-01-31", statementNo: "KS-20260131-001", channel: "PDF" }, tdb);
+    await logGeneratedBill({ partyId, from: "", to: "2026-02-28", statementNo: "KS-20260228-002", channel: "PRINT" }, tdb);
+    const rows = await listGeneratedBills(partyId, tdb);
+    expect(rows.map((r) => r.statementNo).sort()).toEqual(["KS-20260131-001", "KS-20260228-002"]);
+    expect(rows[0]!.createdAt >= rows[1]!.createdAt).toBe(true);
+    const byNo = new Map(rows.map((r) => [r.statementNo, r]));
+    expect(byNo.get("KS-20260228-002")).toMatchObject({ channel: "PRINT", fromDate: "", toDate: "2026-02-28" });
+    expect(byNo.get("KS-20260131-001")).toMatchObject({ channel: "PDF", fromDate: "2026-01-01" });
+    await expect(
+      logGeneratedBill({ partyId, from: "", to: "", statementNo: "  ", channel: "PDF" }, tdb),
+    ).rejects.toThrow(/number/i);
   });
 });

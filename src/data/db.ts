@@ -4,7 +4,7 @@ import Dexie, { type Table } from "dexie";
 export const SHOP_ID = "shop-local-1" as const;
 
 /** Dexie schema version. Bump with a migration block when tables change. */
-export const DB_SCHEMA_VERSION = 3;
+export const DB_SCHEMA_VERSION = 4;
 
 export interface PartyRow {
   id: string;
@@ -106,6 +106,17 @@ export interface StockEntryRow {
   createdAt: string;
 }
 
+/** Info-only log of generated bills: period + when (+channel). Never reopened — statements stay live. */
+export interface GeneratedBillRow {
+  id: string;
+  partyId: string;
+  fromDate: string;
+  toDate: string;
+  statementNo: string;
+  channel: "PDF" | "PRINT";
+  createdAt: string;
+}
+
 /** Explicit manual deltas for OPENING and ADJUSTMENT vouchers. */
 export interface ManualDeltaRow {
   id: string;
@@ -153,6 +164,7 @@ export class JewelrDb extends Dexie {
   manual_deltas!: Table<ManualDeltaRow, string>;
   misc_charges!: Table<MiscChargeRow, string>;
   stock_entries!: Table<StockEntryRow, string>;
+  generated_bills!: Table<GeneratedBillRow, string>;
   ledger_entries!: Table<LedgerEntryRow, string>;
   audit_events!: Table<AuditEventRow, string>;
   app_settings!: Table<AppSettingRow, string>;
@@ -199,6 +211,21 @@ export class JewelrDb extends Dexie {
       audit_events: "id, entityId, timestamp",
       app_settings: "key",
     });
+    // v4: + generated_bills (info-only bill generation log, per party).
+    this.version(4).stores({
+      parties: "id, shopId, name, mobile, active",
+      vouchers: "id, shopId, partyId, businessDate, type, reversesVoucherId",
+      voucher_lines: "id, voucherId",
+      settlements: "id, voucherId",
+      conversions: "id, voucherId",
+      manual_deltas: "id, voucherId",
+      misc_charges: "id, voucherId",
+      stock_entries: "id, voucherId, metal, businessDate",
+      generated_bills: "id, partyId, createdAt",
+      ledger_entries: "id, voucherId, partyId, businessDate",
+      audit_events: "id, entityId, timestamp",
+      app_settings: "key",
+    });
   }
 }
 
@@ -220,6 +247,7 @@ export async function clearDb(dbx: JewelrDb): Promise<void> {
     dbx.manual_deltas,
     dbx.misc_charges,
     dbx.stock_entries,
+    dbx.generated_bills,
     dbx.ledger_entries,
     dbx.audit_events,
     dbx.app_settings,

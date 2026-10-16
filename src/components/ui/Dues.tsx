@@ -75,3 +75,23 @@ export function DuesLine({ cashPaise, goldFineMg, silverFineMg }: {
     </div>
   );
 }
+
+/** Signed cash delta for entry rows: + (emerald) / − (red). Null when zero. */
+export function CashDelta({ paise }: { paise: number }) {
+  if (paise === 0) return null;
+  return (
+    <span className={cn("font-semibold tabular-nums", paise > 0 ? "text-emerald-700" : "text-red-700")}>
+      {paise > 0 ? "+" : "−"}{formatINR(Math.abs(paise))}
+    </span>
+  );
+}
+
+/** Signed metal delta with unit letter: +G 80 g / −S 20 g. Null when zero. */
+export function MetalDelta({ mg, metal }: { mg: number; metal: "GOLD" | "SILVER" }) {
+  if (mg === 0) return null;
+  return (
+    <span className={cn("font-semibold tabular-nums", metal === "GOLD" ? "text-amber-700" : "text-slate-600")}>
+      {mg > 0 ? "+" : "−"}{metal === "GOLD" ? "G" : "S"} {formatGram(Math.abs(mg))}
+    </span>
+  );
+}

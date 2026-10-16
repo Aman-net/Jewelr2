@@ -3,6 +3,7 @@ export type {
   AppSettingRow,
   AuditEventRow,
   ConversionRow,
+  GeneratedBillRow,
   LedgerEntryRow,
   ManualDeltaRow,
   MiscChargeRow,
@@ -19,6 +20,7 @@ export {
   assertRoleDirection,
   assertSingleOpening,
   getVoucher,
+  hasLiveOpening,
   listVouchers,
   postVoucher,
   readVoucher,
@@ -38,8 +40,8 @@ export {
   storedEntriesByVoucher,
 } from "./ledger.ts";
 export type { ActivityFilter, ActivityRow, LedgerFilter, LedgerRow } from "./ledger.ts";
-export { buildStatement, firstOfMonth, getStatement, prevDay } from "./statement.ts";
-export type { Statement, StatementRow } from "./statement.ts";
+export { buildStatement, firstOfMonth, getStatement, listGeneratedBills, logGeneratedBill, prevDay, statementNo } from "./statement.ts";
+export type { LogBillInput, Statement, StatementRow } from "./statement.ts";
 export { getAllDuesSplits, getDuesSplit } from "./dues.ts";
 export type { DuesSplit } from "./dues.ts";
 export {

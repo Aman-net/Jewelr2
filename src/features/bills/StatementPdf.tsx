@@ -23,12 +23,8 @@ export const SHOP_DUMMY = {
   gstin: "GSTIN [if any]",
 };
 
-/** Deterministic statement number so reprints match: KS-YYYYMMDD-NNN. */
-export function statementNo(partyId: string, from: string, to: string): string {
-  let h = 0;
-  for (const ch of `${partyId}|${from}|${to}`) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return `KS-${to.replaceAll("-", "")}-${String((h % 900) + 100)}`;
-}
+/** Deterministic statement number lives in data (logging must not pull the renderer). */
+export { statementNo } from "../../data/statement.ts";
 
 const in2 = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const in0 = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });

@@ -4,7 +4,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { Button } from "../../components/ui/Button.tsx";
 import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
 import { cn } from "../../lib/cn.ts";
-import { DuesLine } from "../../components/ui/Dues.tsx";
+import { CashDelta, DuesLine, MetalDelta } from "../../components/ui/Dues.tsx";
 import { EmptyState } from "../../components/ui/Bits.tsx";
 import { PartyAvatar } from "../../components/ui/PartyAvatar.tsx";
 import { RoleTags } from "../../components/ui/TypeTag.tsx";
@@ -15,7 +15,7 @@ import { StockHomeCard } from "../stock/Stock.tsx";
 import { listActivity } from "../../data/index.ts";
 import { getAllDuesSplits } from "../../data/index.ts";
 import { useAllBalancesLive, usePartyList } from "../../hooks/useLive.ts";
-import { dayLabel, formatGram, formatINR } from "../../lib/format.ts";
+import { dayLabel } from "../../lib/format.ts";
 
 export function HomePage() {
   const balances = useAllBalancesLive();
@@ -135,13 +135,9 @@ export function HomePage() {
                   </span>
                 </div>
                 <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs">
-                  {a.cashDeltaPaise !== 0 && (
-                    <span className={a.cashDeltaPaise > 0 ? "font-semibold text-emerald-700" : "font-semibold text-red-700"}>
-                      {formatINR(a.cashDeltaPaise)}
-                    </span>
-                  )}
-                  {a.goldFineDeltaMg !== 0 && <span className="font-semibold text-amber-700">G {formatGram(a.goldFineDeltaMg)}</span>}
-                  {a.silverFineDeltaMg !== 0 && <span className="font-semibold text-slate-600">S {formatGram(a.silverFineDeltaMg)}</span>}
+                  <CashDelta paise={a.cashDeltaPaise} />
+                  <MetalDelta mg={a.goldFineDeltaMg} metal="GOLD" />
+                  <MetalDelta mg={a.silverFineDeltaMg} metal="SILVER" />
                 </div>
               </div>
               <span className="shrink-0 text-[11px] text-stone-500">{dayLabel(a.businessDate)}</span>

@@ -2,7 +2,8 @@ import type { BalanceDelta } from "../domain/index.ts";
 import { getBalancesAsOf, getLedger } from "./ledger.ts";
 import type { LedgerRow } from "./ledger.ts";
 import { db } from "./db.ts";
-import type { JewelrDb } from "./db.ts";
+import type { GeneratedBillRow, JewelrDb } from "./db.ts";
+import { uuid } from "../lib/uuid.ts";
 
 export interface StatementRow {
   voucherId: string;
@@ -62,6 +63,13 @@ export function prevDay(yyyyMmDd: string): string {
 /** First day of the month containing a YYYY-MM-DD date. */
 export function firstOfMonth(yyyyMmDd: string): string {
   return `${yyyyMmDd.slice(0, 7)}-01`;
+}
+
+/** Deterministic statement number so reprints match: KS-YYYYMMDD-NNN. */
+export function statementNo(partyId: string, from: string, to: string): string {
+  let h = 0;
+  for (const ch of `${partyId}|${from}|${to}`) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return `KS-${to.replaceAll("-", "")}-${String((h % 900) + 100)}`;
 }
 
 export function buildStatement(
@@ -189,4 +197,40 @@ export async function getStatement(
     reversalReason: byId.get(e.voucherId)?.reversalReason,
   }));
   return buildStatement(partyId, from, to, opening, enriched);
+}
+
+export interface LogBillInput {
+  partyId: string;
+  from: string;
+  to: string;
+  statementNo: string;
+  channel: "PDF" | "PRINT";
+}
+
+/**
+ * Info-only log that a bill was generated (period + when + channel).
+ * Never reopened — statements stay live, so a log row is a record of
+ * sharing, not a frozen reprint.
+ */
+export async function logGeneratedBill(input: LogBillInput, dbx: JewelrDb = db): Promise<GeneratedBillRow> {
+  if (!input.partyId) throw new Error("Party is required");
+  if (!input.statementNo.trim()) throw new Error("Statement number is required");
+  const row: GeneratedBillRow = {
+    id: uuid(),
+    partyId: input.partyId,
+    fromDate: input.from,
+    toDate: input.to,
+    statementNo: input.statementNo.trim(),
+    channel: input.channel,
+    createdAt: new Date().toISOString(),
+  };
+  await dbx.generated_bills.add(row);
+  return row;
+}
+
+/** Generation log for one party, newest first. */
+export async function listGeneratedBills(partyId: string, dbx: JewelrDb = db): Promise<GeneratedBillRow[]> {
+  const rows = await dbx.generated_bills.where("partyId").equals(partyId).toArray();
+  rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+  return rows;
 }

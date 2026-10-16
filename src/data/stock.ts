@@ -282,7 +282,7 @@ export async function getItemCfg(metal: string, name: string, dbx: JewelrDb = db
 }
 
 export async function setItemCfg(
-  metal: string,
+  metal: "GOLD" | "SILVER",
   name: string,
   patch: ItemCfg,
   dbx: JewelrDb = db,
@@ -295,7 +295,7 @@ export async function setItemCfg(
   }
   if (patch.lowMg !== undefined) {
     if (patch.lowMg < 0) throw new Error("Low-stock weight cannot be negative");
-    clean.lowMg = patch.lowMg;
+    clean.lowMg = roundMetalMg(patch.lowMg, metal);
   }
   if (patch.lowPcs !== undefined) {
     if (!Number.isInteger(patch.lowPcs) || patch.lowPcs < 0) throw new Error("Low-stock pieces must be a whole number");

@@ -7,7 +7,7 @@ import { Field, Input } from "../../components/ui/Field.tsx";
 import { LoadingRow } from "../../components/ui/Loader.tsx";
 import { PartyAvatar } from "../../components/ui/PartyAvatar.tsx";
 import { MetalTag } from "../../components/ui/TypeTag.tsx";
-import { assembleVoucher, db, getParty, getStatement } from "../../data/index.ts";
+import { assembleVoucher, db, getParty, getStatement, logGeneratedBill, statementNo } from "../../data/index.ts";
 import { firstOfMonth } from "../../data/statement.ts";
 import type { StatementRow } from "../../data/index.ts";
 import type { Voucher } from "../../domain/index.ts";
@@ -44,6 +44,14 @@ const TYPE_ACCENT: Record<string, string> = {
   CONVERSION: "border-l-violet-500",
   REVERSAL: "border-l-red-400",
 };
+
+/** Monday-first start of the week containing a YYYY-MM-DD date. */
+function startOfWeek(yyyyMmDd: string): string {
+  const [y, m, d] = yyyyMmDd.split("-").map(Number);
+  const dt = new Date(y ?? 0, (m ?? 1) - 1, d ?? 1);
+  dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
 
 /** One amount: — when untouched, else signed value. Meaning taught once in the legend. */
 function Amt({ value, text, getTone }: { value: number; text: string; getTone: string }) {
@@ -251,13 +259,12 @@ export function BillPage() {
   const { id = "" } = useParams();
   const [from, setFrom] = useState(() => firstOfMonth(todayLocal()));
   const [to, setTo] = useState(() => todayLocal());
-  const [applied, setApplied] = useState(() => ({ from: firstOfMonth(todayLocal()), to: todayLocal() }));
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState("");
 
   const party = useLiveQuery(() => getParty(id), [id]);
   const data = useLiveQuery(async () => {
-    const st = await getStatement(id, applied.from, applied.to).catch(() => undefined);
+    const st = await getStatement(id, from, to).catch(() => undefined);
     if (!st) return undefined;
     const vouchers = new Map<string, Voucher>();
     await Promise.all(
@@ -267,12 +274,12 @@ export function BillPage() {
       }),
     );
     return { st, vouchers };
-  }, [id, applied]);
+  }, [id, from, to]);
   // Frozen at generation: a print viewed months later must not read as "today".
   const generatedAt = useMemo(
     () => new Date().toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [applied.from, applied.to],
+    [from, to],
   );
   const groups = useMemo(() => {
     const rows = data?.st.rows ?? [];
@@ -292,12 +299,10 @@ export function BillPage() {
   const apply = (f: string, t: string) => {
     setFrom(f);
     setTo(t);
-    setApplied({ from: f, to: t });
   };
   const statement = data?.st;
 
-  /** A4 PDF via on-device renderer (lazy — never in the startup bundle). */
-  const downloadPdf = async () => {
+  /** A4 PDF via on-device renderer (lazy — never in the startup bundle). */  const downloadPdf = async () => {
     if (!statement || !party) return;
     setPdfBusy(true);
     setPdfError("");
@@ -327,30 +332,31 @@ export function BillPage() {
         const last = rows[rows.length - 1]!;
         return { date: formatDate(date), rows: docRows, balCash: last.balCashPaise, balGold: last.balGoldFineMg, balSilver: last.balSilverFineMg };
       });
-      const to = applied.to || todayLocal();
+      const end = to || todayLocal();
+      const no = statementNo(id, from, end);
       const blob = await pdf(
         <doc.StatementDoc
           partyName={party.name}
           partyMobile={party.mobile}
-          from={applied.from}
-          to={to}
-          fromLabel={applied.from ? formatDate(applied.from) : "Beginning"}
-          toLabel={formatDate(to)}
+          from={from}
+          to={end}
+          fromLabel={from ? formatDate(from) : "Beginning"}
+          toLabel={formatDate(end)}
           generatedAt={generatedAt}
-          no={doc.statementNo(id, applied.from, to)}
+          no={no}
           opening={statement.opening}
-          openingLabel={applied.from ? `Opening balance, before ${formatDate(applied.from)}` : "Opening balance, start"}
+          openingLabel={from ? `Opening balance, before ${formatDate(from)}` : "Opening balance, start"}
           days={days}
           entryCount={statement.rows.length}
           totals={statement.totals}
           grossIn={statement.grossIn}
           grossOut={statement.grossOut}
           closing={statement.closing}
-          closingLabel={`CLOSING BALANCE AS ON ${formatDate(to).toUpperCase()}`}
+          closingLabel={`CLOSING BALANCE AS ON ${formatDate(end).toUpperCase()}`}
           metals={statement.metals}
         />,
       ).toBlob();
-      const filename = `Jewelr-${party.name.replace(/[^\w]+/g, "-")}-${applied.from || "Beginning"}-${to}.pdf`;
+      const filename = `Jewelr-${party.name.replace(/[^\w]+/g, "-")}-${from || "Beginning"}-${end}.pdf`;
       const file = new File([blob], filename, { type: "application/pdf" });
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: filename });
@@ -362,11 +368,24 @@ export function BillPage() {
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
       }
+      await logGeneratedBill({ partyId: id, from: from, to: end, statementNo: no, channel: "PDF" }).catch(() => {});
     } catch (e) {
       setPdfError(e instanceof Error ? e.message : "Could not make PDF");
     } finally {
       setPdfBusy(false);
     }
+  };
+
+  const printBill = () => {
+    const end = to || todayLocal();
+    void logGeneratedBill({
+      partyId: id,
+      from: from,
+      to: end,
+      statementNo: statementNo(id, from, end),
+      channel: "PRINT",
+    }).catch(() => {});
+    window.print();
   };
 
   return (
@@ -378,13 +397,15 @@ export function BillPage() {
             <Field label="To"><Input type="date" value={to} max={todayLocal()} onChange={(e) => setTo(e.target.value)} /></Field>
           </div>
           <div className="mt-2 flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => apply(startOfWeek(todayLocal()), todayLocal())}>
+              This week
+            </Button>
             <Button variant="secondary" className="flex-1" onClick={() => apply(firstOfMonth(todayLocal()), todayLocal())}>
               This month
             </Button>
             <Button variant="secondary" className="flex-1" onClick={() => apply("", to || todayLocal())}>
               Full khata
             </Button>
-            <Button className="flex-1" onClick={() => setApplied({ from, to })}>Show</Button>
           </div>
         </Card>
       </div>
@@ -404,7 +425,7 @@ export function BillPage() {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-900">
-                {applied.from ? formatDate(applied.from) : "Beginning"} → {applied.to ? formatDate(applied.to) : formatDate(todayLocal())}
+                {from ? formatDate(from) : "Beginning"} → {to ? formatDate(to) : formatDate(todayLocal())}
               </span>
               <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">
                 {statement.rows.length} entries
@@ -414,7 +435,7 @@ export function BillPage() {
           </div>
 
           <DuesBox
-            title={applied.from ? `Opening balance · before ${formatDate(applied.from)}` : "Opening balance · start"}
+            title={from ? `Opening balance · before ${formatDate(from)}` : "Opening balance · start"}
             cash={statement.opening.cashPaise}
             gold={statement.opening.goldFineMg}
             silver={statement.opening.silverFineMg}
@@ -462,7 +483,7 @@ export function BillPage() {
 
           <div className="bill-controls flex flex-col gap-2">
             <div className="flex gap-2">
-              <div className="flex-1"><Button variant="secondary" full onClick={() => window.print()}>Print</Button></div>
+              <div className="flex-1"><Button variant="secondary" full onClick={printBill}>Print</Button></div>
               <div className="flex-1"><Button full onClick={() => void downloadPdf()} disabled={pdfBusy}>{pdfBusy ? "Making PDF…" : "PDF bill"}</Button></div>
             </div>
             {pdfError ? <p className="text-sm font-medium text-red-700">{pdfError}</p> : null}

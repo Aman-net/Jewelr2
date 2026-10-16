@@ -43,6 +43,12 @@ describe("input parsing", () => {
     expect(parsePercentToScaled("91.6")).toBe(9160);
   });
 
+  it("tolerates live-grouped commas", () => {
+    expect(parseGramsToMg("1,00,000.5")).toBe(100_000_500);
+    expect(parseRupeesToPaise("1,00,000.50")).toBe(10_000_050);
+    expect(parsePercentToScaled("91.6")).toBe(9160);
+  });
+
   it("rejects invalid input", () => {
     expect(() => parseGramsToMg("abc")).toThrow();
     expect(() => parseGramsToMg("-2")).toThrow();

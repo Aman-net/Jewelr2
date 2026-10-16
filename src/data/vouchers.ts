@@ -274,6 +274,15 @@ export async function assertRoleDirection(
  * legitimate (use reversal/replacement or adjustments instead). Reversed
  * openings don't count, so a wrong opening can still be corrected.
  */
+export async function hasLiveOpening(dbx: JewelrDb, partyId: string): Promise<boolean> {
+  const rows = await dbx.vouchers.where("partyId").equals(partyId).toArray();
+  for (const o of rows.filter((r) => r.type === "OPENING")) {
+    const reversed = await dbx.vouchers.where("reversesVoucherId").equals(o.id).first();
+    if (!reversed) return true;
+  }
+  return false;
+}
+
 export async function assertSingleOpening(
   dbx: JewelrDb,
   partyId: string,

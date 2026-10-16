@@ -5,6 +5,7 @@ import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
 import { Chip } from "../../components/ui/Bits.tsx";
 import { Field, Input } from "../../components/ui/Field.tsx";
 import { PartyAvatar } from "../../components/ui/PartyAvatar.tsx";
+import { CashDelta, DuesLine, MetalDelta } from "../../components/ui/Dues.tsx";
 import { TypeTag } from "../../components/ui/TypeTag.tsx";
 import { getEntriesInRange, listActivity } from "../../data/index.ts";
 import { en } from "../../i18n/en.ts";
@@ -77,7 +78,7 @@ export function SummaryPage() {
             <Link key={partyId} to={`/parties/${partyId}`} className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0">
               <PartyAvatar name={nameOf(partyId)} />
               <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-900">{nameOf(partyId)}</span>
-              <span className="text-sm font-semibold text-emerald-700">{formatINR(b.cashPaise)}</span>
+              <DuesLine cashPaise={b.cashPaise} goldFineMg={b.goldFineMg} silverFineMg={b.silverFineMg} />
             </Link>
           ))}
         </Card>
@@ -89,7 +90,7 @@ export function SummaryPage() {
             <Link key={partyId} to={`/parties/${partyId}`} className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0">
               <PartyAvatar name={nameOf(partyId)} />
               <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-900">{nameOf(partyId)}</span>
-              <span className="text-sm font-semibold text-red-700">{formatINR(b.cashPaise)}</span>
+              <DuesLine cashPaise={b.cashPaise} goldFineMg={b.goldFineMg} silverFineMg={b.silverFineMg} />
             </Link>
           ))}
         </Card>
@@ -134,13 +135,9 @@ export function SummaryPage() {
                   <span className="truncate text-sm font-medium text-stone-900">{nameOf(a.partyId)}</span>
                 </div>
                 <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs">
-                  {a.cashDeltaPaise !== 0 && (
-                    <span className={a.cashDeltaPaise > 0 ? "font-semibold text-emerald-700" : "font-semibold text-red-700"}>
-                      {formatINR(a.cashDeltaPaise)}
-                    </span>
-                  )}
-                  {a.goldFineDeltaMg !== 0 && <span className="font-semibold text-amber-700">G {formatGram(a.goldFineDeltaMg)}</span>}
-                  {a.silverFineDeltaMg !== 0 && <span className="font-semibold text-slate-600">S {formatGram(a.silverFineDeltaMg)}</span>}
+                  <CashDelta paise={a.cashDeltaPaise} />
+                  <MetalDelta mg={a.goldFineDeltaMg} metal="GOLD" />
+                  <MetalDelta mg={a.silverFineDeltaMg} metal="SILVER" />
                 </div>
               </div>
               <span className="shrink-0 text-[11px] text-stone-500">{dayLabel(a.businessDate)}</span>
