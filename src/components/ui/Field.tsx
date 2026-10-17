@@ -3,24 +3,26 @@ import { Search } from "lucide-react";
 import { cn } from "../../lib/cn.ts";
 
 const controlClass =
-  "w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-stone-900 placeholder:text-stone-400 focus:border-amber-700 focus:outline-none focus:ring-1 focus:ring-amber-700";
+  "w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-stone-900 placeholder:text-stone-400 transition-[border-color,box-shadow] duration-150 focus:border-amber-700 focus:outline-none focus:ring-1 focus:ring-amber-700";
 
-export function Field({ label, unit, error, hint, children }: {
+export function Field({ label, unit, error, hint, labelAction, children }: {
   label: string;
   unit?: string;
   error?: string;
   hint?: string;
+  /** Right side of the label line — replaces the unit label when set. */
+  labelAction?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <label className="block">
       <span className="mb-1 flex items-baseline justify-between text-sm font-medium text-stone-700">
         <span>{label}</span>
-        {unit ? <span className="text-xs font-normal text-stone-500">{unit}</span> : null}
+        {labelAction ?? (unit ? <span className="text-xs font-normal text-stone-500">{unit}</span> : null)}
       </span>
       {children}
       {hint ? <span className="mt-1 block text-xs text-stone-500">{hint}</span> : null}
-      {error ? <span className="mt-1 block text-xs font-medium text-red-700">{error}</span> : null}
+      {error ? <span role="alert" className="anim-rise mt-1 block text-xs font-medium text-red-700">{error}</span> : null}
     </label>
   );
 }
@@ -49,7 +51,7 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
 
 export function CheckRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="flex min-h-11 cursor-pointer items-center justify-between rounded-xl border border-stone-300 bg-white px-3">
+    <label className="flex min-h-11 cursor-pointer items-center justify-between rounded-xl border border-stone-300 bg-white px-3 transition-colors duration-150 active:bg-stone-50">
       <span className="text-base text-stone-900">{label}</span>
       {children}
     </label>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useSearchParams } from "react-router";
 import { Button } from "../../components/ui/Button.tsx";
@@ -11,6 +11,7 @@ import { SHOP_ID } from "../../data/db.ts";
 import { postVoucher } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import type { BalanceDelta, Voucher } from "../../domain/index.ts";
+import { cn } from "../../lib/cn.ts";
 import { usePartyList } from "../../hooks/useLive.ts";
 import { en } from "../../i18n/en.ts";
 import { parseGramsToMg, parseRupeesToPaise, todayLocal } from "../../lib/format.ts";
@@ -25,6 +26,37 @@ interface Form {
   goldG: string;
   silverG: string;
   notes: string;
+}
+
+type Lane = "cash" | "gold" | "silver";
+/** Per-lane direction: OWES_ME stores positive (party owes shop), I_OWE flips it. */
+type LaneDir = "OWES_ME" | "I_OWE";
+
+const LANES: Record<Lane, { label: string; prefix: string; placeholder: string; field: keyof Form }> = {
+  cash: { label: "Cash opening", prefix: "₹", placeholder: "0.00", field: "cash" },
+  gold: { label: "Gold opening (fine)", prefix: "g", placeholder: "0.000", field: "goldG" },
+  silver: { label: "Silver opening (fine)", prefix: "g", placeholder: "0.000", field: "silverG" },
+};
+
+/** Mini direction switch on a lane's label line — no minus keys needed. */
+function LaneToggle({ value, onChange }: { value: LaneDir; onChange: (v: LaneDir) => void }) {
+  return (
+    <span className="flex shrink-0 rounded-full bg-stone-100 p-0.5">
+      {([["OWES_ME", "Owes me"], ["I_OWE", "I owe"]] as const).map(([v, text]) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => onChange(v)}
+          className={cn(
+            "rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors duration-150",
+            value === v ? "bg-white text-stone-900 shadow-sm" : "text-stone-500",
+          )}
+        >
+          {text}
+        </button>
+      ))}
+    </span>
+  );
 }
 
 function parseSignedGrams(raw: string): number {
@@ -52,6 +84,17 @@ export function OpeningForm() {
   const [posting, setPosting] = useState(false);
   const partyList = usePartyList();
 
+  const [dir, setDir] = useState<Record<Lane, LaneDir>>({ cash: "OWES_ME", gold: "OWES_ME", silver: "OWES_ME" });
+  /** Once the owner flips a lane switch, the role default stops applying. */
+  const dirsTouched = useRef(false);
+  const partyById = (id: string) => (partyList ?? []).find((p) => p.id === id);
+  // Supplier khata opens with the shop owing; customer the reverse. Dual-role
+  // parties take the customer side (same precedence as the conversion flow).
+  const defaultDirFor = (id: string): LaneDir => {
+    const p = partyById(id);
+    return p?.isSupplier && !p.isCustomer ? "I_OWE" : "OWES_ME";
+  };
+
   const { register, handleSubmit, setValue, watch, formState: { isDirty } } = useForm<Form>({
     defaultValues: {
       partyId: params.get("party") ?? "",
@@ -67,14 +110,25 @@ export function OpeningForm() {
   const backTo = params.get("party") ? `/parties/${params.get("party")}` : "/vouchers/new";
   const { prompt } = useLeaveGuard(isDirty && !preview && !posted);
 
+  // Role default: supplier opens "I owe", customer "Owes me". Runs until the
+  // owner flips a lane switch themselves; party changes re-default.
+  useEffect(() => {
+    if (partyId && (partyList ?? []).length > 0 && !dirsTouched.current) {
+      const base = defaultDirFor(partyId);
+      setDir({ cash: base, gold: base, silver: base });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partyId, partyList]);
+
   const onReview = handleSubmit((v) => {
     setError("");
     try {
       if (!v.partyId) throw new Error("Choose a party");
+      const sign = (lane: Lane) => (dir[lane] === "OWES_ME" ? 1 : -1);
       const opening = {
-        cashPaise: parseSignedRupees(v.cash),
-        goldFineMg: parseSignedGrams(v.goldG),
-        silverFineMg: parseSignedGrams(v.silverG),
+        cashPaise: parseSignedRupees(v.cash) * sign("cash"),
+        goldFineMg: parseSignedGrams(v.goldG) * sign("gold"),
+        silverFineMg: parseSignedGrams(v.silverG) * sign("silver"),
       };
       if (opening.cashPaise === 0 && opening.goldFineMg === 0 && opening.silverFineMg === 0) {
         throw new Error("Enter at least one opening balance");
@@ -140,7 +194,7 @@ export function OpeningForm() {
     const d = voucherDeltas(preview);
     return (
       <div className="mx-auto w-full max-w-xl px-4 pb-6 pt-4">
-        <div className="flex flex-col gap-3">
+        <div className="flow-step flex flex-col gap-3">
           <FlowHeader tone="stone" title="Review entry" context={partyName} current={2} labels={["Party", "Balance", "Review"]} />
           <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
             partyName={partyName} posting={posting} error={error}
@@ -155,20 +209,38 @@ export function OpeningForm() {
     <div className="mx-auto w-full max-w-xl px-4 pb-6 pt-4">
       <div className="flex flex-col gap-3">
         <FlowHeader tone="stone" title="Opening balance" backTo={backTo} context={partyName || undefined} current={1} labels={["Party", "Balance", "Review"]} />
-        <form className="flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
+        <form className="flow-step flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
           <Card>
             <div className="flex flex-col gap-3">
-              <PartyPicker value={partyId} onChange={(id) => setValue("partyId", id)} />
+              <p className="text-xs text-stone-500">
+                Standing khata position at this date. Each lane's switch decides who owed whom — plain numbers, no minus signs.
+              </p>
+              <PartyPicker
+                value={partyId}
+                onChange={(id) => {
+                  setValue("partyId", id);
+                  dirsTouched.current = false; // fresh party -> fresh role defaults
+                }}
+              />
               <Field label={en.voucher.date}><Input type="date" {...register("businessDate", { required: true })} max={todayLocal()} /></Field>
-              <Field label="Cash opening" unit={en.units.inr} hint="Use − for amounts you owe the party">
-                <AmountInput prefix="₹" {...register("cash")} inputMode="decimal" placeholder="0.00" />
-              </Field>
-              <Field label="Gold opening (fine)" unit={en.units.g} hint="Use − if you owe the party">
-                <AmountInput prefix="g" {...register("goldG")} inputMode="decimal" placeholder="0.000" />
-              </Field>
-              <Field label="Silver opening (fine)" unit={en.units.g} hint="Use − if you owe the party">
-                <AmountInput prefix="g" {...register("silverG")} inputMode="decimal" placeholder="0.000" />
-              </Field>
+              {(["cash", "gold", "silver"] as const).map((lane) => (
+                <Field
+                  key={lane}
+                  label={LANES[lane].label}
+                  labelAction={
+                    <LaneToggle
+                      value={dir[lane]}
+                      onChange={(v) => {
+                        dirsTouched.current = true;
+                        setDir((d) => ({ ...d, [lane]: v }));
+                      }}
+                    />
+                  }
+                  hint={partyName ? (dir[lane] === "OWES_ME" ? `${partyName} owes you` : `You owe ${partyName}`) : undefined}
+                >
+                  <AmountInput prefix={LANES[lane].prefix} {...register(LANES[lane].field)} inputMode="decimal" placeholder={LANES[lane].placeholder} />
+                </Field>
+              ))}
               <details>
                 <summary className="cursor-pointer text-sm font-medium text-stone-500">{en.more}</summary>
                 <div className="pt-2">
@@ -177,7 +249,7 @@ export function OpeningForm() {
               </details>
             </div>
           </Card>
-          {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
+          {error ? <p className="shake text-sm font-medium text-red-700" role="alert">{error}</p> : null}
           <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">{en.voucher.review} →</Button></StickyCta>
         </form>
         {prompt}

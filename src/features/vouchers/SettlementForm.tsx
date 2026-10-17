@@ -61,7 +61,7 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
   const [posting, setPosting] = useState(false);
   const partyList = usePartyList();
 
-  const { register, handleSubmit, setValue, watch } = useForm<Form>({
+  const { register, handleSubmit, setValue, watch, formState: { isDirty } } = useForm<Form>({
     defaultValues: {
       partyId: state.prefill?.partyId ?? params.get("party") ?? "",
       businessDate: state.prefill?.businessDate ?? todayLocal(),
@@ -81,11 +81,12 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
   const silverG = watch("silverG");
   const silverTunch = watch("silverTunch");
   const partyName = (partyList ?? []).find((p) => p.id === partyId)?.name ?? "";
-  const title = kind === "RECEIPT" ? "Got payment" : "Paid out";
+  const title = kind === "RECEIPT" ? "Receive" : "Pay Out";
   const tone: FlowTone = kind === "RECEIPT" ? "emerald" : "orange";
   const shell = "mx-auto w-full max-w-xl px-4 pb-6 pt-4";
   const backTo = state.prefill?.partyId ?? params.get("party") ? `/parties/${state.prefill?.partyId ?? params.get("party")}` : "/vouchers/new";
-  const { prompt } = useLeaveGuard(step >= 1 && !posted);
+  /** Back walks the flow's own ladder (see SalePurchaseForm) instead of leaving it. */
+  const { prompt } = useLeaveGuard((step > 0 || isDirty) && !posted, step > 0 ? () => setStep(step - 1) : undefined);
 
   const nextFromParty = () => {
     setError("");
@@ -185,7 +186,7 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
     const d = voucherDeltas(preview);
     return (
       <div className={shell}>
-        <div className="flex flex-col gap-3">
+        <div className="flow-step flex flex-col gap-3">
           <FlowHeader tone={tone} title="Review entry" context={partyName} current={2} labels={["Party", "Amount", "Review"]} />
           <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
             partyName={partyName} posting={posting} error={error}
@@ -203,13 +204,14 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
           tone={tone}
           title={title}
           backTo={backTo}
+          backLabel={step > 0 ? "Party" : undefined}
           context={step === 1 ? (kind === "RECEIPT" ? `Received from ${partyName || "…"}` : `Paid to ${partyName || "…"}`) : undefined}
           onChangeContext={step === 1 ? () => setStep(0) : undefined}
           current={step}
           labels={["Party", "Amount", "Review"]}
         />
         {step === 0 && (
-          <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); nextFromParty(); }}>
+          <form className="flow-step flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); nextFromParty(); }}>
             <Card>
               <div className="flex flex-col gap-3">
                 <div className="text-sm text-stone-500">{kind === "RECEIPT" ? "Who paid you?" : "Who did you pay?"}</div>
@@ -217,12 +219,12 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
                 <Field label={en.voucher.date}><Input type="date" {...register("businessDate", { required: true })} max={todayLocal()} /></Field>
               </div>
             </Card>
-            {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
+            {error ? <p className="shake text-sm font-medium text-red-700" role="alert">{error}</p> : null}
             <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">Continue →</Button></StickyCta>
           </form>
         )}
         {step === 1 && (
-          <form className="flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
+          <form className="flow-step stagger flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
             <Card>
               <div className="flex flex-col gap-3">
                 <Field label={kind === "RECEIPT" ? "Cash received" : "Cash paid"} unit={en.units.inr}>
@@ -242,58 +244,58 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
                     ))}
                   </div>
                 </Field>
-                <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-3">
-                  <div className="mb-2"><MetalTag metal="GOLD" /></div>
-                  <div className="flex flex-col gap-3">
-                    <Field label="Weight" unit={en.units.g}>
-                      <AmountInput prefix="g" {...register("goldG")} inputMode="decimal" placeholder="0.000" />
-                    </Field>
-                    <Field label="Tunch" unit={en.units.percent}>
-                      <div className="flex flex-wrap gap-1.5">
-                        {TUNCH_SHORTCUTS.map((t) => (
-                          <Chip key={t} selected={goldTunch === t} onClick={() => setValue("goldTunch", t)}>{t}</Chip>
-                        ))}
-                      </div>
-                      <Input {...register("goldTunch")} inputMode="decimal" placeholder="Or type exact %" className="mt-2" />
-                    </Field>
-                    {metalPreview("GOLD", goldG, goldTunch) ? (
-                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
-                        {metalPreview("GOLD", goldG, goldTunch)}
-                      </div>
-                    ) : null}
+              </div>
+            </Card>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-3 shadow-sm">
+              <div className="mb-2 flex min-h-5 items-center justify-between gap-2">
+                <MetalTag metal="GOLD" />
+                {metalPreview("GOLD", goldG, goldTunch) ? (
+                  <span className="text-xs font-bold tabular-nums text-emerald-900">{metalPreview("GOLD", goldG, goldTunch)}</span>
+                ) : null}
+              </div>
+              <div className="flex flex-col gap-2">
+                <Field label="Weight" unit={en.units.g}>
+                  <Input {...register("goldG")} inputMode="decimal" placeholder="0.000" />
+                </Field>
+                <Field label="Tunch" unit={en.units.percent}>
+                  <div className="grid grid-cols-6 gap-1">
+                    {TUNCH_SHORTCUTS.map((t) => (
+                      <Chip key={t} selected={goldTunch === t} onClick={() => setValue("goldTunch", t)} className="min-h-8 px-1.5 text-xs">{t}</Chip>
+                    ))}
                   </div>
-                </div>
-                <div className="rounded-2xl border border-slate-300 bg-slate-50/60 p-3">
-                  <div className="mb-2"><MetalTag metal="SILVER" /></div>
-                  <div className="flex flex-col gap-3">
-                    <Field label="Weight" unit={en.units.g}>
-                      <AmountInput prefix="g" {...register("silverG")} inputMode="decimal" placeholder="0.000" />
-                    </Field>
-                    <Field label="Tunch" unit={en.units.percent}>
-                      <div className="flex flex-wrap gap-1.5">
-                        {TUNCH_SHORTCUTS.map((t) => (
-                          <Chip key={t} selected={silverTunch === t} onClick={() => setValue("silverTunch", t)}>{t}</Chip>
-                        ))}
-                      </div>
-                      <Input {...register("silverTunch")} inputMode="decimal" placeholder="Or type exact %" className="mt-2" />
-                    </Field>
-                    {metalPreview("SILVER", silverG, silverTunch) ? (
-                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
-                        {metalPreview("SILVER", silverG, silverTunch)}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
+                  <Input {...register("goldTunch")} inputMode="decimal" placeholder="Or type exact %" className="mt-1.5" />
+                </Field>
+              </div>
             </div>
-          </Card>
-          <details className="rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
+            <div className="rounded-2xl border border-slate-300 bg-slate-50/60 p-3 shadow-sm">
+              <div className="mb-2 flex min-h-5 items-center justify-between gap-2">
+                <MetalTag metal="SILVER" />
+                {metalPreview("SILVER", silverG, silverTunch) ? (
+                  <span className="text-xs font-bold tabular-nums text-emerald-900">{metalPreview("SILVER", silverG, silverTunch)}</span>
+                ) : null}
+              </div>
+              <div className="flex flex-col gap-2">
+                <Field label="Weight" unit={en.units.g}>
+                  <Input {...register("silverG")} inputMode="decimal" placeholder="0.000" />
+                </Field>
+                <Field label="Tunch" unit={en.units.percent}>
+                  <div className="grid grid-cols-6 gap-1">
+                    {TUNCH_SHORTCUTS.map((t) => (
+                      <Chip key={t} selected={silverTunch === t} onClick={() => setValue("silverTunch", t)} className="min-h-8 px-1.5 text-xs">{t}</Chip>
+                    ))}
+                  </div>
+                  <Input {...register("silverTunch")} inputMode="decimal" placeholder="Or type exact %" className="mt-1.5" />
+                </Field>
+              </div>
+            </div>
+            <details className="rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
             <summary className="cursor-pointer text-sm font-medium text-stone-700">{en.more}</summary>
             <div className="flex flex-col gap-3 pt-3">
               <Field label="Ref # (optional)"><Input {...register("referenceNumber")} placeholder="—" /></Field>
               <Field label="Notes (optional)"><Textarea {...register("notes")} rows={2} /></Field>
             </div>
           </details>
-          {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
+          {error ? <p className="shake text-sm font-medium text-red-700" role="alert">{error}</p> : null}
           <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">{en.voucher.review} →</Button></StickyCta>
         </form>
       )}

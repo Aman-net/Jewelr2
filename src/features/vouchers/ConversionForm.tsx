@@ -50,7 +50,7 @@ export function ConversionForm() {
     defaultValues: {
       partyId: state.prefill?.partyId ?? params.get("party") ?? "",
       businessDate: state.prefill?.businessDate ?? todayLocal(),
-      direction: state.prefill?.direction ?? "METAL_TO_CASH",
+      direction: state.prefill?.direction ?? "CASH_TO_METAL",
       metal: state.prefill?.metal ?? "GOLD",
       side: state.prefill?.side ?? "PARTY_OWES",
       fineG: state.prefill?.fineG ?? "",
@@ -81,6 +81,17 @@ export function ConversionForm() {
   useEffect(() => {
     void getLastRate(metal).then((r) => setLastRateHint(r ? { amountPaise: r.amountPaise } : undefined));
   }, [metal]);
+
+  /** Default "whose due moves" from the party's role, applied on party pick:
+   * customer → I owe party (booking/advance), supplier → party owes me.
+   * Correction prefill (correctedFrom/prefill.side) keeps its own side. */
+  useEffect(() => {
+    if (state.prefill?.side || state.correctedFrom) return;
+    const party = (partyList ?? []).find((p) => p.id === partyId);
+    if (!party) return;
+    const side: ConversionSide = party.isCustomer ? "SHOP_OWES" : "PARTY_OWES";
+    setValue("side", side, { shouldDirty: false });
+  }, [partyId, partyList]);
 
   const onReview = handleSubmit((v) => {
     setError("");
@@ -154,7 +165,7 @@ export function ConversionForm() {
   if (posted) {
     const d = posted.deltas;
     return (
-      <Page title="Fix rate">
+      <Page title="Convert">
         <Card>
           <SuccessView
             title="Rate fixed"
@@ -176,7 +187,7 @@ export function ConversionForm() {
     const d = voucherDeltas(preview);
     return (
       <div className="mx-auto w-full max-w-xl px-4 pb-6 pt-4">
-        <div className="flex flex-col gap-3">
+        <div className="flow-step flex flex-col gap-3">
           <FlowHeader tone="violet" title="Review entry" context={partyName} current={2} labels={["Party", "Rate", "Review"]} />
           <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
             partyName={partyName} posting={posting} error={error}
@@ -190,8 +201,8 @@ export function ConversionForm() {
   return (
     <div className="mx-auto w-full max-w-xl px-4 pb-6 pt-4">
       <div className="flex flex-col gap-3">
-        <FlowHeader tone="violet" title="Fix rate" backTo={backTo} context={partyName || undefined} current={1} labels={["Party", "Rate", "Review"]} />
-        <form className="flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
+        <FlowHeader tone="violet" title="Convert" backTo={backTo} context={partyName || undefined} current={1} labels={["Party", "Rate", "Review"]} />
+        <form className="flow-step flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
           <Card>
           <div className="flex flex-col gap-3">
             <PartyPicker value={partyId} onChange={(id) => setValue("partyId", id)} />
@@ -228,7 +239,7 @@ export function ConversionForm() {
             </Field>
             <Field label="Direction">
               <Segmented
-                options={["METAL_TO_CASH", "CASH_TO_METAL"] as const}
+                options={["CASH_TO_METAL", "METAL_TO_CASH"] as const}
                 value={direction}
                 onChange={(d) => setValue("direction", d)}
                 labels={{ METAL_TO_CASH: "Metal → cash", CASH_TO_METAL: "Cash → metal" }}
@@ -269,7 +280,7 @@ export function ConversionForm() {
             </details>
           </div>
         </Card>
-        {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
+        {error ? <p className="shake text-sm font-medium text-red-700" role="alert">{error}</p> : null}
         <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">{en.voucher.review} →</Button></StickyCta>
       </form>
       {prompt}

@@ -14,13 +14,13 @@ describe("router", () => {
   it("mounts the sale entry flow", async () => {
     window.location.hash = "#/vouchers/new/sale";
     render(<Router />);
-    expect(await screen.findByText("Sell goods")).toBeTruthy();
+    expect(await screen.findByText("Sale")).toBeTruthy();
     expect(screen.getByText("Who is buying?")).toBeTruthy();
   });
 
   it("mounts the receipt entry flow", async () => {
     window.location.hash = "#/vouchers/new/receipt";
     render(<Router />);
-    expect(await screen.findByText("Got payment")).toBeTruthy();
+    expect(await screen.findByText("Receive")).toBeTruthy();
   });
 });

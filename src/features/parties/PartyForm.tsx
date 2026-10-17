@@ -56,7 +56,7 @@ export function PartyForm({ onDone }: { onDone: (id: string, duplicateName: bool
           <PartyAvatar name={namePreview.trim() || "?"} size="lg" />
           <div className="min-w-0 flex-1">
             <Field label={en.party.name} error={errors.name?.message}>
-              <Input {...register("name")} placeholder="e.g. Sharma Bullion" autoFocus className="border-0 bg-transparent px-0 text-lg font-semibold focus:ring-0" />
+              <Input {...register("name")} placeholder="e.g. Sharma Bullion" autoFocus className="py-3 text-lg font-semibold" />
             </Field>
           </div>
         </div>
@@ -97,7 +97,7 @@ export function PartyForm({ onDone }: { onDone: (id: string, duplicateName: bool
 
 export function PartyNewPage({ onDone }: { onDone: (id: string, dup: boolean) => void }) {
   return (
-    <Page title={en.party.add} backTo="/parties" backLabel="Parties">
+    <Page title={en.party.add} backTo="/parties" backLabel="Parties" contentClass="stagger">
       <PartyForm onDone={onDone} />
     </Page>
   );

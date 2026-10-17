@@ -1,10 +1,10 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate, useNavigationType } from "react-router";
+import { useLayoutEffect, useRef } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { Home, Plus, RefreshCw, Settings, Users, Wallet } from "lucide-react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { getLastBackupAt, getVoucher } from "../../data/index.ts";
-import { parentFor } from "../../lib/nav.ts";
+import { isVoucherDetail, parentFor } from "../../lib/nav.ts";
 import { en } from "../../i18n/en.ts";
 import { daysSince } from "../../lib/format.ts";
 import { cn } from "../../lib/cn.ts";
@@ -19,7 +19,7 @@ function BackupBanner() {
     <Link
       to="/settings/backup"
       className={cn(
-        "block px-4 py-2 text-center text-sm font-medium",
+        "bar-in block px-4 py-2 text-center text-sm font-medium",
         strong ? "bg-red-100 text-red-900" : "bg-amber-100 text-amber-900",
       )}
     >
@@ -38,13 +38,13 @@ const tabs = [
 
 /**
  * Hub screens keep the bottom nav; focused flows (entry, detail, edit,
- * manage) go full-screen with their own back affordance. Deep links land
- * safely either way thanks to BackButton fallbacks.
+ * manage) go full-screen with their own back affordance. The New-entry picker
+ * is a tab destination, not a flow, so it keeps the nav.
  */
 function navHidden(pathname: string): boolean {
   return (
     pathname.startsWith("/vouchers/new/") ||
-    /^\/vouchers\/[^/]+$/.test(pathname) ||
+    isVoucherDetail(pathname) ||
     pathname === "/parties/new" ||
     pathname.endsWith("/edit") ||
     pathname.endsWith("/bill") ||
@@ -61,10 +61,10 @@ function UpdateBanner() {
   } = useRegisterSW();
   if (!needRefresh) return null;
   return (
-    <div className="flex items-center justify-between gap-2 bg-stone-900 px-4 py-2 text-sm text-white">
+    <div className="bar-in flex items-center justify-between gap-2 bg-stone-900 px-4 py-2 text-sm text-white">
       <span className="font-medium">A new version is ready — your data is safe.</span>
       <button
-        className="flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-bold text-stone-900"
+        className="flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-bold text-stone-900 transition-transform duration-150 active:scale-95"
         onClick={() => {
           setNeedRefresh(false);
           void updateServiceWorker(true);
@@ -76,42 +76,90 @@ function UpdateBanner() {
   );
 }
 
+/** Where a back press made *from* this screen should land. */
+async function backTargetFor(pathname: string, search: string): Promise<string | null> {
+  // Home is its own floor: back there never wanders into a tab visited earlier.
+  if (pathname === "/") return "/";
+  if (isVoucherDetail(pathname)) {
+    const id = pathname.split("/")[2] ?? "";
+    const stored = await getVoucher(id).catch(() => undefined);
+    return stored ? `/parties/${stored.voucher.partyId}` : "/";
+  }
+  return parentFor(pathname, search);
+}
+
 /**
- * System back, made deterministic: a POP navigation (phone back button,
- * browser back, swipe) lands on the screen's declared parent instead of
- * wherever history points. In-app back buttons already go to parents
- * directly, so any POP reaching here is the platform gesture.
- * Root has no parent — there the platform exits the app, as expected.
+ * System back, made deterministic: a back press lands on the parent of the
+ * screen the operator was actually on — not of wherever the browser popped to.
+ *
+ * Those two differ often enough to matter: a wizard opened from a khata pops
+ * *to* that khata, whose own parent is Home, and reading the destination
+ * bounced people past the screen they came from. The origin is the contract the
+ * in-app back button already follows, so this keeps the two in step.
+ *
+ * Recognising the press is the fiddly part, because React Router reports every
+ * hash change as POP — a reload, a typed URL and an <a href="#/…"> link all
+ * arrive looking like a back press. What separates them is the entry itself: a
+ * press lands on a history entry this session already showed (React Router
+ * gives each one a stable key), while anything that appends an entry invents a
+ * new one. The index moving backwards is the backup signal.
+ *
+ * Home is the one screen with no parent: there a press just stays put, and once
+ * the history runs out the platform leaves the app, as expected. Every other
+ * screen gets a floor entry laid under it the moment it sits at position 0, so
+ * its parent is never more than one press away.
  */
-function useDeterministicBack() {
+function useSystemBack() {
   const location = useLocation();
   const navigate = useNavigate();
-  const navType = useNavigationType();
-  useEffect(() => {
-    if (navType !== "POP") return;
-    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
-    if (idx <= 0) return;
-    let cancelled = false;
-    void (async () => {
-      let parent: string | null;
-      if (/^\/vouchers\/[^/]+$/.test(location.pathname)) {
-        const id = location.pathname.split("/")[2] ?? "";
-        const stored = await getVoucher(id).catch(() => undefined);
-        parent = stored ? `/parties/${stored.voucher.partyId}` : "/";
-      } else {
-        parent = parentFor(location.pathname, location.search);
-      }
-      if (!cancelled && parent) navigate(parent, { replace: true });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [location.pathname, location.search, navType, navigate]);
+  const from = useRef({ pathname: "/", search: "" });
+  const prevIdx = useRef<number | null>(null);
+  const seen = useRef(new Set<string>());
+
+  useLayoutEffect(() => {
+    const rawIdx = (window.history.state as { idx?: number } | null)?.idx;
+    const idx = typeof rawIdx === "number" ? rawIdx : null;
+    const here = `${location.pathname}${location.search}`;
+    const origin = from.current;
+    const visited = location.key !== "default" && seen.current.has(location.key);
+    const pressedBack = visited || (idx !== null && prevIdx.current !== null && idx < prevIdx.current);
+    seen.current.add(location.key);
+    prevIdx.current = idx;
+    from.current = { pathname: location.pathname, search: location.search };
+
+    if (pressedBack) {
+      let cancelled = false;
+      void (async () => {
+        const target = await backTargetFor(origin.pathname, origin.search);
+        if (cancelled || !target || target === here) return;
+        navigate(target, { replace: true });
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // Not a press: just make sure the next one has somewhere in-app to land.
+    if (idx === 0 && parentFor(location.pathname, location.search)) {
+      navigate(here, { replace: false });
+    }
+  }, [location.key, location.pathname, location.search, navigate]);
+}
+
+/**
+ * Hosts the system-back rules *outside* the per-route error boundary. That
+ * boundary is keyed by pathname (so navigating away from a crash clears it),
+ * which remounts everything inside — and these rules hold state that has to
+ * outlive a route change: the screen the press came *from*, and the depth we
+ * last saw.
+ */
+export function SystemBack() {
+  useSystemBack();
+  return null;
 }
 
 export function Shell() {
   const location = useLocation();
-  useDeterministicBack();
   const showNav = !navHidden(location.pathname);
   return (
     <div className={showNav ? "app-shell min-h-svh bg-stone-100" : "min-h-svh bg-stone-100"}>
@@ -121,28 +169,43 @@ export function Shell() {
         <Outlet />
       </main>
       {showNav && (
-        <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)]">
+        <nav className="nav-in fixed inset-x-0 bottom-0 z-10 border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)]">
           <div className="mx-auto grid max-w-xl grid-cols-5">
-            {tabs.map(({ to, label, Icon, end }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                className={({ isActive }) =>
-                  cn(
-                    "flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium",
-                    isActive ? "text-amber-800" : "text-stone-500",
-                  )
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <Icon size={22} fill={isActive ? "currentColor" : "none"} />
-                    {label}
-                  </>
-                )}
-              </NavLink>
-            ))}
+            {tabs.map(({ to, label, Icon, end }) =>
+              to === "/vouchers/new" ? (
+                /** Center action: raised amber FAB riding the bar's top edge —
+                 * ring halo carves it out of content scrolling behind. Gentle
+                 * roll on hover (desktop), spring-back on press. */
+                <NavLink key={to} to={to} aria-label={label} className="flex justify-center pt-2">
+                  <span className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-amber-800 text-white shadow-lg shadow-amber-900/30 ring-4 ring-white transition-transform duration-200 hover:rotate-6 active:scale-95">
+                    <Plus size={26} strokeWidth={2.5} />
+                  </span>
+                </NavLink>
+              ) : (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors duration-200",
+                      isActive ? "text-amber-800" : "text-stone-500",
+                    )
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <Icon
+                        size={22}
+                        fill={isActive ? "currentColor" : "none"}
+                        className={cn("transition-transform duration-200", isActive && "scale-105")}
+                      />
+                      {label}
+                    </>
+                  )}
+                </NavLink>
+              ),
+            )}
           </div>
         </nav>
       )}

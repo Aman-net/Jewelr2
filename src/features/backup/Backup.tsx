@@ -162,7 +162,7 @@ export function BackupPage() {
   };
 
   return (
-    <Page title="Settings">
+    <Page title="Settings" contentClass="stagger">
       <div className={cn(
         "rounded-3xl p-5 text-white shadow-md",
         safety === "safe" ? "bg-gradient-to-br from-emerald-600 to-emerald-800"
@@ -185,8 +185,8 @@ export function BackupPage() {
         </div>
       </div>
 
-      {status ? <div className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">{status}</div> : null}
-      {error ? <div className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-800">{error}</div> : null}
+      {status ? <div className="anim-fade rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">{status}</div> : null}
+      {error ? <div className="anim-fade rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-800">{error}</div> : null}
 
       <SectionLabel>Restore</SectionLabel>
       <Card>
@@ -206,7 +206,7 @@ export function BackupPage() {
           <Upload size={18} /> Choose backup file…
         </Button>
         {pending && (
-          <div className="mt-3 flex flex-col gap-2 rounded-xl bg-stone-50 p-3">
+          <div className="anim-rise mt-3 flex flex-col gap-2 rounded-xl bg-stone-50 p-3">
             <div className="text-sm text-stone-700">{countsLine(pending.counts)}</div>
             {!pending.empty && (
               <CheckRow label="Replace ALL existing data (I have a backup)">
@@ -222,7 +222,7 @@ export function BackupPage() {
 
       <SectionLabel>Shop</SectionLabel>
       <ShopDetailsCard />
-      <Link to="/settings/items">
+      <Link to="/settings/items" className="tappable block">
         <Card>
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 text-violet-800">

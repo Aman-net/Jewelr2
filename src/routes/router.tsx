@@ -1,7 +1,7 @@
 import { Suspense, lazy } from "react";
 import type { ReactNode } from "react";
 import { Navigate, RouterProvider, createHashRouter, useLocation, useNavigate, useParams } from "react-router";
-import { Shell } from "../components/layout/Shell.tsx";
+import { Shell, SystemBack } from "../components/layout/Shell.tsx";
 import { AppErrorBoundary } from "../components/ui/ErrorBoundary.tsx";
 import { HomePage } from "../features/home/Home.tsx";
 import { KhataPage } from "../features/parties/Khata.tsx";
@@ -29,7 +29,7 @@ const StockMovePage = lazy(() => import("../features/stock/Stock.tsx").then((m) 
 function deferred(node: ReactNode) {
   return (
     <Suspense fallback={
-      <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-3 px-4 pt-16 text-sm text-stone-500">
+      <div className="anim-fade mx-auto flex w-full max-w-xl flex-col items-center gap-3 px-4 pt-16 text-sm text-stone-500">
         <Spinner className="h-8 w-8" />
         Loading…
       </div>
@@ -90,9 +90,12 @@ function PartyNewWrapper() {
 function BoundShell() {
   const location = useLocation();
   return (
-    <AppErrorBoundary key={location.pathname}>
-      <Shell />
-    </AppErrorBoundary>
+    <>
+      <SystemBack />
+      <AppErrorBoundary key={location.pathname}>
+        <Shell />
+      </AppErrorBoundary>
+    </>
   );
 }
 

@@ -23,6 +23,7 @@ export function PartyListPage() {
     <Page
       title={en.party.title}
       action={<Link to="/parties/new"><Button>{en.party.add}</Button></Link>}
+      contentClass="stagger"
     >
       <SearchInput placeholder={en.party.search} value={q} onChange={(e) => setQ(e.target.value)} inputMode="search" />
       {parties !== undefined && matches.length === 0 && (
@@ -33,7 +34,7 @@ export function PartyListPage() {
         />
       )}
       {matches.map((p) => (
-        <Link key={p.id} to={`/parties/${p.id}`}>
+        <Link key={p.id} to={`/parties/${p.id}`} className="tappable block">
           <Card>
             <div className="flex items-center gap-3">
               <PartyAvatar name={p.name} />
@@ -53,7 +54,7 @@ export function PartyListPage() {
         </Link>
       ))}
       <button
-        className="self-center text-xs font-medium text-stone-500"
+        className="row-press self-center rounded px-2 py-1 text-xs font-medium text-stone-500 active:bg-stone-200"
         onClick={() => setShowInactive((s) => !s)}
       >
         {showInactive ? "Hide inactive" : "Show inactive"}

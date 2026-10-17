@@ -44,7 +44,7 @@ export function CategoryField({ metal, value, onPick }: {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex min-h-[52px] w-full items-center justify-between rounded-xl border border-stone-300 bg-white px-3 text-left active:bg-amber-50"
+          className="flex min-h-[52px] w-full items-center justify-between rounded-xl border border-stone-300 bg-white px-3 text-left transition-[background-color,border-color] duration-150 active:border-amber-300 active:bg-amber-50"
         >
           <span className={value ? "text-base font-medium text-stone-900" : "text-base text-stone-400"}>
             {value || en.item.pick}
@@ -87,7 +87,7 @@ export function CategoryField({ metal, value, onPick }: {
               <button
                 type="button"
                 onClick={() => pick(q.trim().replace(/\b\w/g, (c) => c.toUpperCase()))}
-                className="rounded-xl bg-amber-800 px-4 py-3 text-sm font-semibold text-white active:bg-amber-900"
+                className="anim-fade rounded-xl bg-amber-800 px-4 py-3 text-sm font-semibold text-white transition-colors duration-150 active:bg-amber-900"
               >
                 + Use “{q.trim()}” as new item
               </button>

@@ -116,7 +116,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
   const [posting, setPosting] = useState(false);
   const [lastRates, setLastRates] = useState<Record<string, { amountPaise: number }>>({});
 
-  const { register, control, handleSubmit, setValue, watch, getValues, trigger } = useForm<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>({
+  const { register, control, handleSubmit, setValue, watch, getValues, trigger, formState: { isDirty } } = useForm<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>({
     defaultValues: {
       partyId: prefill?.partyId ?? params.get("party") ?? "",
       businessDate: prefill?.businessDate ?? todayLocal(),
@@ -132,7 +132,12 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
   const partyList = usePartyList();
   const partyName = (partyList ?? []).find((p) => p.id === partyId)?.name ?? "";
   const backTo = prefill?.partyId ?? params.get("party") ? `/parties/${prefill?.partyId ?? params.get("party")}` : "/vouchers/new";
-  const { prompt } = useLeaveGuard(step >= 1 && !posted);
+  /**
+   * Back walks the wizard, not the app: on the details or review step a press
+   * steps up one step (no "leave?" sheet, nothing typed is thrown away); on the
+   * party step it leaves, and only asks when there is something to lose.
+   */
+  const { prompt } = useLeaveGuard((step > 0 || isDirty) && !posted, step > 0 ? () => setStep(step - 1) : undefined);
   const stockRows = useStockLive();
   const stockMap = useMemo(
     () => new Map((stockRows ?? []).map((b) => [`${b.metal}|${b.name.trim().toLowerCase()}`, b] as const)),
@@ -291,7 +296,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
     }
   };
 
-  const title = kind === "SALE" ? "Sell goods" : "Buy goods";
+  const title = kind === "SALE" ? "Sale" : "Purchase";
   const tone: FlowTone = kind === "SALE" ? "amber" : "sky";
   const shell = "mx-auto w-full max-w-xl px-4 pb-6 pt-4";
 
@@ -320,7 +325,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
     const d = voucherDeltas(preview);
     return (
       <div className={shell}>
-        <div className="flex flex-col gap-3">
+        <div className="flow-step flex flex-col gap-3">
           <FlowHeader tone={tone} title="Review entry" context={partyName} current={2} labels={["Party", "Goods", "Review"]} />
           {shorts.length > 0 && (
             <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
@@ -348,13 +353,14 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
           tone={tone}
           title={title}
           backTo={backTo}
+          backLabel={step > 0 ? "Party" : undefined}
           context={step === 1 ? (kind === "SALE" ? `Giving goods to ${partyName || "…"}` : `Taking goods from ${partyName || "…"}`) : undefined}
           onChangeContext={step === 1 ? () => setStep(0) : undefined}
           current={step}
           labels={["Party", "Goods", "Review"]}
         />
       {step === 0 && (
-        <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void nextFromParty(); }}>
+        <form className="flow-step flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void nextFromParty(); }}>
           <Card>
             <div className="flex flex-col gap-3">
               <div className="text-sm text-stone-500">{kind === "SALE" ? "Who is buying?" : "Who are you buying from?"}</div>
@@ -369,12 +375,12 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
               </div>
             </div>
           </Card>
-          {reviewError ? <p className="text-sm font-medium text-red-700">{reviewError}</p> : null}
+          {reviewError ? <p className="shake text-sm font-medium text-red-700" role="alert">{reviewError}</p> : null}
           <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">Continue →</Button></StickyCta>
         </form>
       )}
       {step === 1 && (
-        <form className="flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
+        <form className="flow-step stagger flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
           {fields.map((f, i) => (
             <LineCard
               key={f.id}
@@ -420,7 +426,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
               </Field>
             </div>
           </details>
-          {reviewError ? <p className="text-sm font-medium text-red-700">{reviewError}</p> : null}
+          {reviewError ? <p className="shake text-sm font-medium text-red-700" role="alert">{reviewError}</p> : null}
           <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">{en.voucher.review} →</Button></StickyCta>
         </form>
       )}

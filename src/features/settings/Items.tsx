@@ -44,7 +44,7 @@ export function ItemsPage() {
   });
 
   return (
-    <Page title={en.item.manage} backTo="/settings/backup" backLabel="Settings">
+    <Page title={en.item.manage} backTo="/settings/backup" backLabel="Settings" contentClass="stagger">
       <Segmented
         options={["GOLD", "SILVER"] as const}
         value={metal}
@@ -104,7 +104,7 @@ export function ItemsPage() {
               <span className="min-w-0 flex-1 truncate text-base font-medium text-stone-900">{name}</span>
               {confirmDelete === name ? (
                 <button
-                  className="shrink-0 rounded-full bg-red-700 px-3 py-1.5 text-sm font-semibold text-white"
+                  className="anim-fade shrink-0 rounded-full bg-red-700 px-3 py-1.5 text-sm font-semibold text-white transition-transform duration-150 active:scale-95"
                   onClick={() => run(async () => {
                     await deleteCustom(metal, name);
                     setConfirmDelete(null);

@@ -270,11 +270,11 @@ export function StatementDoc(p: StatementDocProps) {
           <Text style={s.closingTitle}>{p.openingLabel}</Text>
           <View style={s.closingRow}>
             <CloseCell label="Cash" value={signed2(p.opening.cashPaise)} />
-            {p.metals.silver ? (
-              <CloseCell label="Silver fine" value={signedG3(p.opening.silverFineMg, "SILVER")} />
-            ) : null}
             {p.metals.gold ? (
               <CloseCell label="Gold fine" value={signedG3(p.opening.goldFineMg, "GOLD")} />
+            ) : null}
+            {p.metals.silver ? (
+              <CloseCell label="Silver fine" value={signedG3(p.opening.silverFineMg, "SILVER")} />
             ) : null}
           </View>
         </View>
@@ -331,11 +331,11 @@ export function StatementDoc(p: StatementDocProps) {
           <Text style={s.closingTitle}>{p.closingLabel}</Text>
           <View style={s.closingRow}>
             <CloseCell label="Cash" value={signed2(p.closing.cashPaise)} />
-            {p.metals.silver ? (
-              <CloseCell label="Silver fine" value={signedG3(p.closing.silverFineMg, "SILVER")} />
-            ) : null}
             {p.metals.gold ? (
               <CloseCell label="Gold fine" value={signedG3(p.closing.goldFineMg, "GOLD")} />
+            ) : null}
+            {p.metals.silver ? (
+              <CloseCell label="Silver fine" value={signedG3(p.closing.silverFineMg, "SILVER")} />
             ) : null}
           </View>
         </View>

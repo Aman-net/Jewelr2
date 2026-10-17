@@ -40,7 +40,7 @@ export function PartyPicker({ value, onChange, error }: {
           type="button"
           onClick={() => setOpen(true)}
           className={cn(
-            "flex min-h-[52px] w-full items-center gap-3 rounded-xl border border-stone-300 bg-white px-3 text-left active:bg-amber-50",
+            "flex min-h-[52px] w-full items-center gap-3 rounded-xl border border-stone-300 bg-white px-3 text-left transition-[background-color,border-color] duration-150 active:bg-amber-50 active:border-amber-300",
             !selected && "justify-between",
           )}
         >
@@ -52,7 +52,7 @@ export function PartyPicker({ value, onChange, error }: {
           ) : (
             <>
               <span className="flex-1 text-left text-base text-stone-400">Choose party…</span>
-              <span className="text-lg text-stone-400">▾</span>
+              <span className="text-lg text-stone-400 transition-transform duration-200">▾</span>
             </>
           )}
           {selected ? <span className="shrink-0 text-sm font-medium text-amber-800">Change</span> : null}
@@ -73,7 +73,7 @@ export function PartyPicker({ value, onChange, error }: {
                 <button
                   key={p.id}
                   type="button"
-                  className="border-b border-stone-100 py-2.5 text-left last:border-0 active:bg-amber-50"
+                  className="row-press border-b border-stone-100 px-1 py-2.5 text-left last:border-0 active:rounded-lg active:bg-amber-50"
                   onClick={() => {
                     onChange(p.id);
                     close();
@@ -90,7 +90,7 @@ export function PartyPicker({ value, onChange, error }: {
               ))}
             </div>
             {matches.length === 0 && (
-              <div className="rounded-xl bg-stone-50 p-4 text-center">
+              <div className="anim-fade rounded-xl bg-stone-50 p-4 text-center">
                 <div className="text-sm text-stone-600">No party matches “{q.trim()}”.</div>
                 <Link to="/parties/new" className="mt-1 inline-block text-sm font-semibold text-amber-800">
                   + Add new party

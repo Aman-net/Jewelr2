@@ -42,6 +42,7 @@ export const en = {
     reversal: "Reversal",
     review: "Review before posting",
     confirm: "Confirm & post",
+    posting: "Posting…",
     back: "Back",
     date: "Date",
     party: "Party",
