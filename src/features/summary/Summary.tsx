@@ -5,7 +5,8 @@ import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
 import { Chip } from "../../components/ui/Bits.tsx";
 import { Field, Input } from "../../components/ui/Field.tsx";
 import { PartyAvatar } from "../../components/ui/PartyAvatar.tsx";
-import { TypeTag } from "../../components/ui/TypeTag.tsx";
+import { CashDelta, DuesLine, MetalDelta } from "../../components/ui/Dues.tsx";
+import { TypeTag, RoleTags } from "../../components/ui/TypeTag.tsx";
 import { getEntriesInRange, listActivity } from "../../data/index.ts";
 import { en } from "../../i18n/en.ts";
 import { dayLabel, formatGram, formatINR, todayLocal } from "../../lib/format.ts";
@@ -43,11 +44,29 @@ export function SummaryPage() {
     [from, to, typeFilter],
   );
 
-  const nameOf = (id: string) => (parties ?? []).find((p) => p.id === id)?.name ?? "…";
+  const partyOf = (id: string) => (parties ?? []).find((p) => p.id === id);
+  const nameOf = (id: string) => partyOf(id)?.name ?? "…";
 
   const rows = Object.entries(balances ?? {});
-  const toReceive = rows.filter(([, b]) => b.cashPaise > 0).sort((a, b) => b[1].cashPaise - a[1].cashPaise).slice(0, 3);
-  const toPay = rows.filter(([, b]) => b.cashPaise < 0).sort((a, b) => a[1].cashPaise - b[1].cashPaise).slice(0, 3);
+  // Any-column dues count (a party owing only metal is invisible to a
+  // cash-only filter). Ranked metal-first — metal settles in metal, so grams
+  // owed decide who gets acted on; cash breaks ties.
+  const toReceive = rows
+    .filter(([, b]) => b.cashPaise > 0 || b.goldFineMg > 0 || b.silverFineMg > 0)
+    .sort((a, b) =>
+      b[1].goldFineMg - a[1].goldFineMg
+      || b[1].silverFineMg - a[1].silverFineMg
+      || b[1].cashPaise - a[1].cashPaise,
+    )
+    .slice(0, 3);
+  const toPay = rows
+    .filter(([, b]) => b.cashPaise < 0 || b.goldFineMg < 0 || b.silverFineMg < 0)
+    .sort((a, b) =>
+      a[1].goldFineMg - b[1].goldFineMg
+      || a[1].silverFineMg - b[1].silverFineMg
+      || a[1].cashPaise - b[1].cashPaise,
+    )
+    .slice(0, 3);
 
   const netCash = rows.reduce((n, [, b]) => n + b.cashPaise, 0);
   const netGold = rows.reduce((n, [, b]) => n + b.goldFineMg, 0);
@@ -73,11 +92,17 @@ export function SummaryPage() {
       {toReceive.length > 0 && (
         <Card>
           <div className="mb-1 text-sm font-semibold text-emerald-800">Top to receive</div>
+          <p className="mb-2 text-xs text-stone-500">Ranked metal first — grams owed before cash.</p>
           {toReceive.map(([partyId, b]) => (
             <Link key={partyId} to={`/parties/${partyId}`} className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0">
               <PartyAvatar name={nameOf(partyId)} />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-900">{nameOf(partyId)}</span>
-              <span className="text-sm font-semibold text-emerald-700">{formatINR(b.cashPaise)}</span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-stone-900">{nameOf(partyId)}</div>
+                <div className="mt-0.5">
+                  <RoleTags isCustomer={partyOf(partyId)?.isCustomer ?? false} isSupplier={partyOf(partyId)?.isSupplier ?? false} />
+                </div>
+              </div>
+              <DuesLine cashPaise={b.cashPaise} goldFineMg={b.goldFineMg} silverFineMg={b.silverFineMg} />
             </Link>
           ))}
         </Card>
@@ -88,8 +113,13 @@ export function SummaryPage() {
           {toPay.map(([partyId, b]) => (
             <Link key={partyId} to={`/parties/${partyId}`} className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0">
               <PartyAvatar name={nameOf(partyId)} />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-900">{nameOf(partyId)}</span>
-              <span className="text-sm font-semibold text-red-700">{formatINR(b.cashPaise)}</span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-stone-900">{nameOf(partyId)}</div>
+                <div className="mt-0.5">
+                  <RoleTags isCustomer={partyOf(partyId)?.isCustomer ?? false} isSupplier={partyOf(partyId)?.isSupplier ?? false} />
+                </div>
+              </div>
+              <DuesLine cashPaise={b.cashPaise} goldFineMg={b.goldFineMg} silverFineMg={b.silverFineMg} />
             </Link>
           ))}
         </Card>
@@ -134,13 +164,9 @@ export function SummaryPage() {
                   <span className="truncate text-sm font-medium text-stone-900">{nameOf(a.partyId)}</span>
                 </div>
                 <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs">
-                  {a.cashDeltaPaise !== 0 && (
-                    <span className={a.cashDeltaPaise > 0 ? "font-semibold text-emerald-700" : "font-semibold text-red-700"}>
-                      {formatINR(a.cashDeltaPaise)}
-                    </span>
-                  )}
-                  {a.goldFineDeltaMg !== 0 && <span className="font-semibold text-amber-700">G {formatGram(a.goldFineDeltaMg)}</span>}
-                  {a.silverFineDeltaMg !== 0 && <span className="font-semibold text-slate-600">S {formatGram(a.silverFineDeltaMg)}</span>}
+                  <CashDelta paise={a.cashDeltaPaise} />
+                  <MetalDelta mg={a.goldFineDeltaMg} metal="GOLD" />
+                  <MetalDelta mg={a.silverFineDeltaMg} metal="SILVER" />
                 </div>
               </div>
               <span className="shrink-0 text-[11px] text-stone-500">{dayLabel(a.businessDate)}</span>

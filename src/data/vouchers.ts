@@ -8,6 +8,7 @@ import type {
   BalanceDelta,
   ConversionInput,
   LedgerEntryDelta,
+  MiscChargeInput,
   SalePurchaseLine,
   SalePurchaseLineInput,
   SettlementInput,
@@ -18,12 +19,14 @@ import type {
 import type { Table } from "dexie";
 import { uuid } from "../lib/uuid.ts";
 import { recordCategoryUse } from "./categories.ts";
+import { negateTradeStock, tradeRowsFor } from "./stock.ts";
 import { SHOP_ID, db } from "./db.ts";
 import type {
   ConversionRow,
   JewelrDb,
   LedgerEntryRow,
   ManualDeltaRow,
+  MiscChargeRow,
   SettlementRow,
   VoucherLineRow,
   VoucherRow,
@@ -42,6 +45,7 @@ export interface PostVoucherInput {
   conversion?: ConversionInput;
   opening?: BalanceDelta;
   adjustment?: BalanceDelta;
+  misc?: MiscChargeInput[];
   createdAt?: string;
 }
 
@@ -108,6 +112,8 @@ function toLineRow(l: SalePurchaseLine): VoucherLineRow {
     rateUnit: l.rateUnit,
     pricingMode: l.pricingMode,
     labourPaisePerGram: l.labourPaisePerGram,
+    labourMode: l.labourMode,
+    labourRatePaise: l.labourRatePaise,
     labourPaise: l.labourPaise,
     lineCashPaise: l.lineCashPaise,
     notes: l.notes,
@@ -162,6 +168,7 @@ async function addVoucherParts(
       voucherId: voucher.id,
       direction: c.direction,
       metalType: c.metalType,
+      side: c.side,
       fineMg: c.fineMg,
       rateAmountPaise: c.rateAmountPaise,
       rateUnit: c.rateUnit,
@@ -187,7 +194,21 @@ async function addVoucherParts(
     };
     await dbx.manual_deltas.add(row);
   }
+  if (voucher.misc.length > 0) {
+    const rows: MiscChargeRow[] = voucher.misc.map((m: MiscChargeInput) => ({
+      id: uuid(),
+      voucherId: voucher.id,
+      label: m.label,
+      cashPaise: m.cashPaise,
+    }));
+    await dbx.misc_charges.bulkAdd(rows);
+  }
   await dbx.ledger_entries.add(toEntryRow(entry, voucher.createdAt));
+  // Shelf moves with the khata: trade lines write stock in the same breath.
+  const tradeRows = tradeRowsFor(voucher);
+  if (tradeRows.length > 0) {
+    await dbx.stock_entries.bulkAdd(tradeRows.map((r) => ({ ...r, id: uuid() })));
+  }
 }
 
 function entryFromDeltas(
@@ -212,6 +233,8 @@ function writeTables(dbx: JewelrDb): Table[] {
     dbx.settlements,
     dbx.conversions,
     dbx.manual_deltas,
+    dbx.misc_charges,
+    dbx.stock_entries,
     dbx.ledger_entries,
     dbx.app_settings,
   ];
@@ -225,11 +248,41 @@ async function rememberCategories(dbx: JewelrDb, voucher: Voucher): Promise<void
 }
 
 /**
+ * Role-direction rule (owner-confirmed 2026-10-15): SALE needs a customer,
+ * PURCHASE needs a supplier. Money flows (receipt/payment/conversion) and
+ * openings stay open to all roles. Unknown parties are rejected outright.
+ */
+export async function assertRoleDirection(
+  dbx: JewelrDb,
+  partyId: string,
+  type: VoucherType,
+): Promise<void> {
+  if (type !== "SALE" && type !== "PURCHASE") return;
+  const party = await dbx.parties.get(partyId);
+  if (!party) throw new Error("Unknown party — create the party first");
+  if (type === "SALE" && !party.isCustomer) {
+    throw new Error(`${party.name} is not a customer — sales are disabled here`);
+  }
+  if (type === "PURCHASE" && !party.isSupplier) {
+    throw new Error(`${party.name} is not a supplier — purchases are disabled here`);
+  }
+}
+
+/**
  * Opening balances seed the paper khata exactly once per party — at creation
  * or later with a backdated as-of date. A second live opening is never
  * legitimate (use reversal/replacement or adjustments instead). Reversed
  * openings don't count, so a wrong opening can still be corrected.
  */
+export async function hasLiveOpening(dbx: JewelrDb, partyId: string): Promise<boolean> {
+  const rows = await dbx.vouchers.where("partyId").equals(partyId).toArray();
+  for (const o of rows.filter((r) => r.type === "OPENING")) {
+    const reversed = await dbx.vouchers.where("reversesVoucherId").equals(o.id).first();
+    if (!reversed) return true;
+  }
+  return false;
+}
+
 export async function assertSingleOpening(
   dbx: JewelrDb,
   partyId: string,
@@ -266,9 +319,11 @@ export async function postVoucher(input: PostVoucherInput, dbx: JewelrDb = db): 
     conversion: input.conversion,
     opening: input.opening,
     adjustment: input.adjustment,
+    misc: input.misc,
   };
   // Pure validation + snapshot computation first — throws before any write.
   const voucher = buildVoucher(domainInput);
+  await assertRoleDirection(dbx, voucher.partyId, voucher.type);
   if (voucher.type === "OPENING") {
     await assertSingleOpening(dbx, voucher.partyId);
   }
@@ -334,6 +389,8 @@ export async function reverseVoucher(
   const entry = entryFromDeltas(voucher, deltas);
   await dbx.transaction("rw", writeTables(dbx), async () => {
     await addVoucherParts(dbx, voucher, entry);
+    // Reversed trade returns to (or leaves) the shelf.
+    await negateTradeStock(dbx, originalId, voucher.id, voucher.businessDate, voucher.createdAt);
   });
   return { voucher, entry, duplicate: false };
 }
@@ -379,6 +436,7 @@ export async function replaceVoucher(
   if (replacement.type === "OPENING") {
     await assertSingleOpening(dbx, replacement.partyId, originalId);
   }
+  await assertRoleDirection(dbx, replacement.partyId, replacement.type);
   const repVoucher = buildVoucher({
     id: repId,
     shopId: SHOP_ID,
@@ -393,11 +451,13 @@ export async function replaceVoucher(
     conversion: replacement.conversion,
     opening: replacement.opening,
     adjustment: replacement.adjustment,
+    misc: replacement.misc,
   });
   const repEntry = entryFromDeltas(repVoucher, voucherDeltas(repVoucher));
 
   await dbx.transaction("rw", writeTables(dbx), async () => {
     await addVoucherParts(dbx, revVoucher, revEntry);
+    await negateTradeStock(dbx, originalId, revVoucher.id, revVoucher.businessDate, revVoucher.createdAt);
     await addVoucherParts(dbx, repVoucher, repEntry);
     await rememberCategories(dbx, repVoucher);
   });
@@ -411,11 +471,12 @@ export async function replaceVoucher(
 export async function assembleVoucher(dbx: JewelrDb, id: string): Promise<Voucher | undefined> {
   const row = await dbx.vouchers.get(id);
   if (!row) return undefined;
-  const [lines, settlement, conversion, manuals] = await Promise.all([
+  const [lines, settlement, conversion, manuals, misc] = await Promise.all([
     dbx.voucher_lines.where("voucherId").equals(id).toArray(),
     dbx.settlements.where("voucherId").equals(id).first(),
     dbx.conversions.where("voucherId").equals(id).first(),
     dbx.manual_deltas.where("voucherId").equals(id).toArray(),
+    dbx.misc_charges.where("voucherId").equals(id).toArray(),
   ]);
   const opening = manuals.find((m) => m.kind === "OPENING");
   const adjustment = manuals.find((m) => m.kind === "ADJUSTMENT");
@@ -445,6 +506,10 @@ export async function assembleVoucher(dbx: JewelrDb, id: string): Promise<Vouche
         rateUnit: l.rateUnit as SalePurchaseLine["rateUnit"],
         pricingMode: l.pricingMode as SalePurchaseLine["pricingMode"],
         labourPaisePerGram: l.labourPaisePerGram,
+        // Legacy v1 rows stored per-gram rates; read them as per-kg (×1000).
+        labourMode: (l.labourMode ?? (l.labourPaisePerGram ? "PER_KG" : undefined)) as SalePurchaseLine["labourMode"],
+        labourRatePaise:
+          l.labourRatePaise ?? (l.labourPaisePerGram !== undefined ? l.labourPaisePerGram * 1000 : undefined),
         labourPaise: l.labourPaise,
         lineCashPaise: l.lineCashPaise,
         notes: l.notes,
@@ -466,6 +531,8 @@ export async function assembleVoucher(dbx: JewelrDb, id: string): Promise<Vouche
       ? {
           direction: conversion.direction as ConversionInput["direction"],
           metalType: conversion.metalType as ConversionInput["metalType"],
+          // Legacy v1 rows predate the side field; they were party-owes math.
+          side: (conversion.side ?? "PARTY_OWES") as ConversionInput["side"],
           fineMg: conversion.fineMg,
           rateAmountPaise: conversion.rateAmountPaise,
           rateUnit: conversion.rateUnit as ConversionInput["rateUnit"],
@@ -482,6 +549,9 @@ export async function assembleVoucher(dbx: JewelrDb, id: string): Promise<Vouche
           silverFineMg: adjustment.silverFineMg,
         }
       : null,
+    misc: misc
+      .map((m) => ({ label: m.label, cashPaise: m.cashPaise }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
     createdAt: row.createdAt,
   };
   return voucher;

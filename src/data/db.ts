@@ -4,7 +4,7 @@ import Dexie, { type Table } from "dexie";
 export const SHOP_ID = "shop-local-1" as const;
 
 /** Dexie schema version. Bump with a migration block when tables change. */
-export const DB_SCHEMA_VERSION = 1;
+export const DB_SCHEMA_VERSION = 4;
 
 export interface PartyRow {
   id: string;
@@ -48,6 +48,9 @@ export interface VoucherLineRow {
   rateUnit?: string;
   pricingMode: string;
   labourPaisePerGram?: number;
+  /** Owner-confirmed 2026-10-15: PER_PIECE | PER_KG. Legacy v1 rows carry per-gram rates. */
+  labourMode?: string;
+  labourRatePaise?: number;
   labourPaise: number;
   lineCashPaise: number;
   notes?: string;
@@ -71,10 +74,47 @@ export interface ConversionRow {
   voucherId: string;
   direction: string;
   metalType: string;
+  /** Owner-confirmed 2026-10-15; legacy rows (v1) predate it. */
+  side?: string;
   fineMg: number;
   rateAmountPaise: number;
   rateUnit: string;
   cashPaise: number;
+}
+
+/** Voucher-level extra charges (SALE/PURCHASE). */
+export interface MiscChargeRow {
+  id: string;
+  voucherId: string;
+  label: string;
+  cashPaise: number;
+}
+
+/** Shop stock movements. Trade rows link a voucher; seed/adjust rows stand alone with a reason. */
+export interface StockEntryRow {
+  id: string;
+  voucherId: string | null;
+  metal: string;
+  itemName: string;
+  physicalDeltaMg: number;
+  pcsDelta: number;
+  /** False when the movement carries no piece count (pieces are optional). */
+  hasPcs: boolean;
+  fineDeltaMg: number;
+  businessDate: string;
+  reason?: string;
+  createdAt: string;
+}
+
+/** Info-only log of generated bills: period + when (+channel). Never reopened — statements stay live. */
+export interface GeneratedBillRow {
+  id: string;
+  partyId: string;
+  fromDate: string;
+  toDate: string;
+  statementNo: string;
+  channel: "PDF" | "PRINT";
+  createdAt: string;
 }
 
 /** Explicit manual deltas for OPENING and ADJUSTMENT vouchers. */
@@ -122,6 +162,9 @@ export class JewelrDb extends Dexie {
   settlements!: Table<SettlementRow, string>;
   conversions!: Table<ConversionRow, string>;
   manual_deltas!: Table<ManualDeltaRow, string>;
+  misc_charges!: Table<MiscChargeRow, string>;
+  stock_entries!: Table<StockEntryRow, string>;
+  generated_bills!: Table<GeneratedBillRow, string>;
   ledger_entries!: Table<LedgerEntryRow, string>;
   audit_events!: Table<AuditEventRow, string>;
   app_settings!: Table<AppSettingRow, string>;
@@ -129,13 +172,56 @@ export class JewelrDb extends Dexie {
   constructor(name = "jewelr2") {
     super(name);
     // One flat table per entity; voucher lines in their own table; no nested arrays.
-    this.version(DB_SCHEMA_VERSION).stores({
+    // v1: base schema. v2: + misc_charges table; conversions.side + lines
+    // labourMode/labourRatePaise are schemaless columns (no index change).
+    this.version(1).stores({
       parties: "id, shopId, name, mobile, active",
       vouchers: "id, shopId, partyId, businessDate, type, reversesVoucherId",
       voucher_lines: "id, voucherId",
       settlements: "id, voucherId",
       conversions: "id, voucherId",
       manual_deltas: "id, voucherId",
+      ledger_entries: "id, voucherId, partyId, businessDate",
+      audit_events: "id, entityId, timestamp",
+      app_settings: "key",
+    });
+    this.version(2).stores({
+      parties: "id, shopId, name, mobile, active",
+      vouchers: "id, shopId, partyId, businessDate, type, reversesVoucherId",
+      voucher_lines: "id, voucherId",
+      settlements: "id, voucherId",
+      conversions: "id, voucherId",
+      manual_deltas: "id, voucherId",
+      misc_charges: "id, voucherId",
+      ledger_entries: "id, voucherId, partyId, businessDate",
+      audit_events: "id, entityId, timestamp",
+      app_settings: "key",
+    });
+    // v3: + stock_entries (shop stock ledger; trade rows link vouchers).
+    this.version(3).stores({
+      parties: "id, shopId, name, mobile, active",
+      vouchers: "id, shopId, partyId, businessDate, type, reversesVoucherId",
+      voucher_lines: "id, voucherId",
+      settlements: "id, voucherId",
+      conversions: "id, voucherId",
+      manual_deltas: "id, voucherId",
+      misc_charges: "id, voucherId",
+      stock_entries: "id, voucherId, metal, businessDate",
+      ledger_entries: "id, voucherId, partyId, businessDate",
+      audit_events: "id, entityId, timestamp",
+      app_settings: "key",
+    });
+    // v4: + generated_bills (info-only bill generation log, per party).
+    this.version(4).stores({
+      parties: "id, shopId, name, mobile, active",
+      vouchers: "id, shopId, partyId, businessDate, type, reversesVoucherId",
+      voucher_lines: "id, voucherId",
+      settlements: "id, voucherId",
+      conversions: "id, voucherId",
+      manual_deltas: "id, voucherId",
+      misc_charges: "id, voucherId",
+      stock_entries: "id, voucherId, metal, businessDate",
+      generated_bills: "id, partyId, createdAt",
       ledger_entries: "id, voucherId, partyId, businessDate",
       audit_events: "id, entityId, timestamp",
       app_settings: "key",
@@ -152,33 +238,21 @@ export function createTestDb(name: string): JewelrDb {
 
 /** Clear every table. Test helper only. */
 export async function clearDb(dbx: JewelrDb): Promise<void> {
-  await dbx.transaction(
-    "rw",
-    [
-      dbx.parties,
-      dbx.vouchers,
-      dbx.voucher_lines,
-      dbx.settlements,
-      dbx.conversions,
-      dbx.manual_deltas,
-      dbx.ledger_entries,
-      dbx.audit_events,
-      dbx.app_settings,
-    ],
-    async () => {
-      await Promise.all(
-        [
-          dbx.parties,
-          dbx.vouchers,
-          dbx.voucher_lines,
-          dbx.settlements,
-          dbx.conversions,
-          dbx.manual_deltas,
-          dbx.ledger_entries,
-          dbx.audit_events,
-          dbx.app_settings,
-        ].map((t) => t.clear()),
-      );
-    },
-  );
+  const tables = [
+    dbx.parties,
+    dbx.vouchers,
+    dbx.voucher_lines,
+    dbx.settlements,
+    dbx.conversions,
+    dbx.manual_deltas,
+    dbx.misc_charges,
+    dbx.stock_entries,
+    dbx.generated_bills,
+    dbx.ledger_entries,
+    dbx.audit_events,
+    dbx.app_settings,
+  ];
+  await dbx.transaction("rw", tables, async () => {
+    await Promise.all(tables.map((t) => t.clear()));
+  });
 }

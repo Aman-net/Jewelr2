@@ -7,10 +7,10 @@ import { BalanceGrid } from "./Card.tsx";
 afterEach(() => cleanup());
 
 describe("BalanceGrid", () => {
-  it("renders cash and fine-metal balances", () => {
-    render(<BalanceGrid cashPaise={10050000} goldFineMg={0} silverFineMg={80000} />);
-    expect(screen.getByText("₹1,00,500.00")).toBeTruthy();
-    expect(screen.getByText("80 g")).toBeTruthy();
+  it("renders signed cash and fine-metal balances", () => {
+    render(<BalanceGrid cashPaise={10050000} goldFineMg={0} silverFineMg={-80000} />);
+    expect(screen.getByText("+₹1,00,500.00")).toBeTruthy();
+    expect(screen.getByText("−80 g")).toBeTruthy();
   });
 
   it("is a pure readout with no actions", async () => {

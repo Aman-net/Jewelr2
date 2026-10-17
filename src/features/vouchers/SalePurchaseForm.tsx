@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import type { UseFormRegister, UseFormSetValue, UseFormWatch } from "react-hook-form";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
@@ -10,14 +10,18 @@ import { FlowHeader, StickyCta, type FlowTone } from "../../components/ui/Flow.t
 import { useLeaveGuard } from "../../hooks/useLeaveGuard.tsx";
 import { Segmented } from "../../components/ui/Segmented.tsx";
 import { SuccessView } from "../../components/ui/Success.tsx";
-import { getLastRate, postVoucher, setLastRate } from "../../data/index.ts";
+import { SHOP_ID } from "../../data/db.ts";
+import { checkShortSale, getItemCfg, getLastRate, postVoucher, setLastRate } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import { fineToCash, GOLD_QUOTE_MG, SILVER_QUOTE_MG } from "../../domain/numeric/metalValue.ts";
-import { fineFromPhysical } from "../../domain/numeric/tunch.ts";
-import { labourOnPhysical } from "../../domain/numeric/labour.ts";
-import type { BalanceDelta, MetalType, PricingMode, Voucher } from "../../domain/index.ts";
-import { usePartyList } from "../../hooks/useLive.ts";
+import { lineFineMg } from "../../domain/rules/tunch.ts";
+import { roundMetalMg } from "../../domain/numeric/rounding.ts";
+import { labourPerKg, labourPerPiece } from "../../domain/numeric/labour.ts";
+import type { BalanceDelta, LabourMode, MetalType, PricingMode, Voucher } from "../../domain/index.ts";
+import type { StockBucket } from "../../data/index.ts";
+import { usePartyList, useStockLive } from "../../hooks/useLive.ts";
 import { en } from "../../i18n/en.ts";
+import Decimal from "decimal.js";
 import { formatGram, formatINR, parseGramsToMg, parsePercentToScaled, parseRupeesToPaise, todayLocal } from "../../lib/format.ts";
 import { uuid } from "../../lib/uuid.ts";
 import { CategoryField } from "./CategoryField.tsx";
@@ -33,7 +37,13 @@ interface LineForm {
   agreedTunch: string;
   mode: PricingMode;
   rate: string;
-  labour: string;
+  labourMode: LabourMode | "";
+  labourRate: string;
+}
+
+interface MiscForm {
+  label: string;
+  amount: string;
 }
 
 interface HeaderForm {
@@ -47,25 +57,46 @@ export interface SalePrefill {
   partyId?: string;
   businessDate?: string;
   lines?: Partial<LineForm>[];
+  misc?: Partial<MiscForm>[];
   correctedFrom?: string;
 }
 
 const TUNCH_SHORTCUTS = ["70", "75", "80", "85", "91.6", "100"];
 
 const emptyLine = (): LineForm => ({
-  metal: "SILVER", category: "", itemCount: "", physicalG: "", recordedTunch: "", agreedTunch: "", mode: "METAL_OPEN", rate: "", labour: "",
+  metal: "SILVER", category: "", itemCount: "", physicalG: "", recordedTunch: "", agreedTunch: "", mode: "METAL_OPEN", rate: "", labourMode: "", labourRate: "",
 });
+
+const emptyMisc = (): MiscForm => ({ label: "", amount: "" });
+
+/** Labour preview for a form line; 0 when unset. */
+function lineLabour(l: LineForm): number {
+  try {
+    if (!l.labourMode || !l.labourRate.trim()) return 0;
+    const rate = parseRupeesToPaise(l.labourRate);
+    if (l.labourMode === "PER_PIECE") {
+      const count = Number(l.itemCount);
+      if (!count || count <= 0) return 0;
+      return labourPerPiece(count, rate);
+    }
+    return labourPerKg(roundMetalMg(parseGramsToMg(l.physicalG), l.metal), rate);
+  } catch {
+    return 0;
+  }
+}
 
 function lineHint(l: LineForm, kind: "SALE" | "PURCHASE"): string | null {
   try {
     const physicalMg = parseGramsToMg(l.physicalG);
     if (physicalMg <= 0 || !l.agreedTunch.trim()) return null;
-    const fine = fineFromPhysical(physicalMg, parsePercentToScaled(l.agreedTunch));
+    const fine = lineFineMg(physicalMg, parsePercentToScaled(l.agreedTunch), l.metal);
     const who = kind === "SALE" ? "Party owes" : "You owe";
-    if (l.mode === "METAL_OPEN") return `${who} fine ${formatGram(fine)}`;
+    const labour = lineLabour(l);
+    if (l.mode === "METAL_OPEN") {
+      return labour > 0 ? `${who} fine ${formatGram(fine)} + ${formatINR(labour)} labour` : `${who} fine ${formatGram(fine)}`;
+    }
     if (!l.rate.trim()) return `${who} fine ${formatGram(fine)} · enter rate`;
     const value = fineToCash(fine, parseRupeesToPaise(l.rate), l.metal === "GOLD" ? GOLD_QUOTE_MG : SILVER_QUOTE_MG);
-    const labour = l.labour.trim() && kind === "SALE" ? labourOnPhysical(physicalMg, parseRupeesToPaise(l.labour)) : 0;
     return `${who} ${formatINR(value + labour)}`;
   } catch {
     return null;
@@ -85,21 +116,60 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
   const [posting, setPosting] = useState(false);
   const [lastRates, setLastRates] = useState<Record<string, { amountPaise: number }>>({});
 
-  const { register, control, handleSubmit, setValue, watch, trigger } = useForm<HeaderForm & { lines: LineForm[] }>({
+  const { register, control, handleSubmit, setValue, watch, getValues, trigger } = useForm<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>({
     defaultValues: {
       partyId: prefill?.partyId ?? params.get("party") ?? "",
       businessDate: prefill?.businessDate ?? todayLocal(),
       referenceNumber: "",
       notes: prefill?.correctedFrom ? `Corrects ${prefill.correctedFrom}` : "",
       lines: prefill?.lines?.map((l) => ({ ...emptyLine(), ...l })) ?? [emptyLine()],
+      misc: prefill?.misc?.map((m) => ({ ...emptyMisc(), ...m })) ?? [],
     },
   });
   const { fields, append, remove } = useFieldArray({ control, name: "lines" });
+  const miscFields = useFieldArray({ control, name: "misc" });
   const partyId = watch("partyId");
   const partyList = usePartyList();
   const partyName = (partyList ?? []).find((p) => p.id === partyId)?.name ?? "";
   const backTo = prefill?.partyId ?? params.get("party") ? `/parties/${prefill?.partyId ?? params.get("party")}` : "/vouchers/new";
   const { prompt } = useLeaveGuard(step >= 1 && !posted);
+  const stockRows = useStockLive();
+  const stockMap = useMemo(
+    () => new Map((stockRows ?? []).map((b) => [`${b.metal}|${b.name.trim().toLowerCase()}`, b] as const)),
+    [stockRows],
+  );
+  const stockOf = (metal: MetalType, name: string): StockBucket | undefined =>
+    name.trim() ? stockMap.get(`${metal}|${name.trim().toLowerCase()}`) : undefined;
+
+  /**
+   * Item pick: set the name, prefill the item's default tunch when empty, and
+   * (on sales) the item's saved selling labour so the line starts correct.
+   */
+  const pickItem = (index: number, metal: MetalType, name: string) => {
+    setValue(`lines.${index}.category`, name);
+    void getItemCfg(metal, name).then((cfg) => {
+      const tunchKey = `lines.${index}.agreedTunch` as const;
+      if (cfg.defaultTunchScaled !== undefined && !getValues(tunchKey)?.trim()) {
+        setValue(tunchKey, new Decimal(cfg.defaultTunchScaled).div(100).toString());
+      }
+      if (kind === "SALE" && cfg.sellingLabourMode !== undefined && cfg.sellingLabourRatePaise !== undefined) {
+        setValue(`lines.${index}.labourMode`, cfg.sellingLabourMode);
+        setValue(`lines.${index}.labourRate`, new Decimal(cfg.sellingLabourRatePaise).div(100).toString());
+      }
+    });
+  };
+
+  /** Warn-only shorts for SALE review — posting stays allowed. */
+  const shorts = useMemo(
+    () =>
+      kind === "SALE" && preview && stockRows
+        ? checkShortSale(
+            preview.lines.map((l) => ({ metalType: l.metalType, categoryName: l.categoryName, physicalMg: l.physicalMg })),
+            stockRows,
+          )
+        : [],
+    [kind, preview, stockRows],
+  );
 
   useEffect(() => {
     void Promise.all([getLastRate("GOLD"), getLastRate("SILVER")]).then(([g, s]) => {
@@ -116,6 +186,15 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
       setReviewError("Choose the party first — whose khata is this?");
       return;
     }
+    const role = (partyList ?? []).find((p) => p.id === partyId);
+    if (kind === "SALE" && role && !role.isCustomer) {
+      setReviewError(`${role.name} is not a customer — sales are disabled here.`);
+      return;
+    }
+    if (kind === "PURCHASE" && role && !role.isSupplier) {
+      setReviewError(`${role.name} is not a supplier — purchases are disabled here.`);
+      return;
+    }
     setStep(1);
   };
 
@@ -125,7 +204,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
       if (v.lines.length === 0) throw new Error("Add at least one line");
       const built = buildVoucher({
         id: voucherId,
-        shopId: "shop-local-1",
+        shopId: SHOP_ID,
         type: kind,
         partyId: v.partyId,
         businessDate: v.businessDate,
@@ -138,6 +217,10 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
           if (physicalMg <= 0) throw new Error(`Line ${i + 1}: weight must be positive`);
           const agreedTunchScaled = parsePercentToScaled(l.agreedTunch);
           const recorded = l.recordedTunch.trim();
+          const labour = l.labourMode ? l.labourRate.trim() : "";
+          if (l.labourMode === "PER_PIECE" && !l.itemCount.trim()) {
+            throw new Error(`Line ${i + 1}: pieces required for per-piece labour`);
+          }
           return {
             metalType: l.metal,
             categoryName: l.category.trim(),
@@ -148,10 +231,18 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
             pricingMode: l.mode,
             rateAmountPaise: l.mode === "CASH_AT_RATE" ? parseRupeesToPaise(l.rate) : undefined,
             rateUnit: l.mode === "CASH_AT_RATE" ? (l.metal === "GOLD" ? "GOLD_PER_10G" : "SILVER_PER_KG") : undefined,
-            labourPaisePerGram: l.labour.trim() ? parseRupeesToPaise(l.labour) : undefined,
+            labourMode: l.labourMode || undefined,
+            labourRatePaise: labour ? parseRupeesToPaise(labour) : undefined,
             notes: undefined,
           };
         }),
+        misc: v.misc
+          .filter((m) => m.label.trim() || m.amount.trim())
+          .map((m, i) => {
+            if (!m.label.trim()) throw new Error(`Charge ${i + 1}: label is required`);
+            // Signed: negative amount = discount/kamayi.
+            return { label: m.label.trim(), cashPaise: parseRupeesToPaise(m.amount, true) };
+          }),
       });
       setPreview(built);
       setStep(2);
@@ -182,8 +273,10 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
           pricingMode: l.pricingMode,
           rateAmountPaise: l.rateAmountPaise,
           rateUnit: l.rateUnit,
-          labourPaisePerGram: l.labourPaisePerGram,
+          labourMode: l.labourMode,
+          labourRatePaise: l.labourRatePaise,
         })),
+        misc: preview.misc.map((m) => ({ label: m.label, cashPaise: m.cashPaise })),
       });
       for (const l of preview.lines) {
         if (l.pricingMode === "CASH_AT_RATE" && l.rateAmountPaise && l.rateUnit) {
@@ -229,6 +322,16 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
       <div className={shell}>
         <div className="flex flex-col gap-3">
           <FlowHeader tone={tone} title="Review entry" context={partyName} current={2} labels={["Party", "Goods", "Review"]} />
+          {shorts.length > 0 && (
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+              <div className="font-bold">Short shelf — posting anyway (warn only)</div>
+              {shorts.map((s) => (
+                <div key={`${s.metal}|${s.name}`}>
+                  {s.name}: needs {formatGram(s.needMg)}, shelf {formatGram(s.haveMg)}
+                </div>
+              ))}
+            </div>
+          )}
           <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
             partyName={partyName} posting={posting} error={reviewError}
             onBack={() => { setPreview(null); setStep(1); }} onConfirm={onConfirm} />
@@ -281,10 +384,34 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
               watch={watch}
               setValue={setValue}
               lastRate={lastRates[watch(`lines.${i}.metal`)]}
+              stockOf={stockOf}
+              onPickItem={(name) => pickItem(i, watch(`lines.${i}.metal`), name)}
               onRemove={fields.length > 1 ? () => remove(i) : undefined}
             />
           ))}
           <Button variant="secondary" type="button" onClick={() => { append(emptyLine()); void trigger(); }}>+ Add item</Button>
+          <Card>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-semibold text-stone-900">Extra charges (optional)</span>
+              <button type="button" className="text-sm font-medium text-amber-800" onClick={() => miscFields.append(emptyMisc())}>+ Add</button>
+            </div>
+            {miscFields.fields.length === 0 && (
+              <p className="text-xs text-stone-500">Packing, transport… added to the cash due. Use a − amount for a discount.</p>
+            )}
+            <div className="flex flex-col gap-2">
+              {miscFields.fields.map((f, i) => (
+                <div key={f.id} className="grid grid-cols-[1fr_110px_auto] items-end gap-2">
+                  <Field label={i === 0 ? "Label" : ""}>
+                    <Input {...register(`misc.${i}.label`)} placeholder="e.g. Packing" />
+                  </Field>
+                  <Field label={i === 0 ? "₹" : ""}>
+                    <Input {...register(`misc.${i}.amount`)} inputMode="decimal" placeholder="0.00 (− = discount)" />
+                  </Field>
+                  <button type="button" className="pb-2.5 text-sm font-medium text-red-700" onClick={() => miscFields.remove(i)}>✕</button>
+                </div>
+              ))}
+            </div>
+          </Card>
           <details className="rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
             <summary className="cursor-pointer text-sm font-medium text-stone-700">{en.more}</summary>
             <div className="pt-3">
@@ -303,18 +430,50 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
   );
 }
 
-function LineCard({ index, kind, register, watch, setValue, lastRate, onRemove }: {
+/** Shelf readout under the item picker. Warn-only on sales — never blocks. */
+function ShelfHint({ kind, metal, category, enteredG, stockOf }: {
+  kind: "SALE" | "PURCHASE";
+  metal: MetalType;
+  category: string;
+  enteredG: string;
+  stockOf: (metal: MetalType, name: string) => StockBucket | undefined;
+}) {
+  if (!category.trim()) return null;
+  const have = stockOf(metal, category);
+  if (!have) {
+    return kind === "SALE"
+      ? <div className="text-xs text-stone-500">Shelf: none yet — first sale posts anyway (warn only).</div>
+      : null;
+  }
+  let short = false;
+  try {
+    short = kind === "SALE" && enteredG.trim() !== "" && parseGramsToMg(enteredG) > have.physicalMg;
+  } catch {
+    short = false;
+  }
+  return (
+    <div className="text-xs text-stone-500">
+      Shelf: {formatGram(have.physicalMg)}{have.pcs !== null ? ` (${have.pcs} pcs)` : ""}
+      {short ? <span className="font-semibold text-amber-700"> · short — posts anyway</span> : null}
+    </div>
+  );
+}
+
+function LineCard({ index, kind, register, watch, setValue, lastRate, stockOf, onPickItem, onRemove }: {
   index: number;
   kind: "SALE" | "PURCHASE";
-  register: UseFormRegister<HeaderForm & { lines: LineForm[] }>;
-  watch: UseFormWatch<HeaderForm & { lines: LineForm[] }>;
-  setValue: UseFormSetValue<HeaderForm & { lines: LineForm[] }>;
+  register: UseFormRegister<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>;
+  watch: UseFormWatch<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>;
+  setValue: UseFormSetValue<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>;
   lastRate: { amountPaise: number } | undefined;
+  stockOf: (metal: MetalType, name: string) => StockBucket | undefined;
+  onPickItem: (name: string) => void;
   onRemove?: () => void;
 }) {
   const metal = watch(`lines.${index}.metal`);
   const mode = watch(`lines.${index}.mode`);
   const agreed = watch(`lines.${index}.agreedTunch`);
+  const labourMode = watch(`lines.${index}.labourMode`);
   const line = watch(`lines.${index}`);
   const hint = lineHint(line, kind);
   return (
@@ -333,7 +492,8 @@ function LineCard({ index, kind, register, watch, setValue, lastRate, onRemove }
             SILVER: <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-400" /> Silver</span>,
           }}
         />
-        <CategoryField metal={metal} value={watch(`lines.${index}.category`)} onPick={(name) => setValue(`lines.${index}.category`, name)} />
+        <CategoryField metal={metal} value={watch(`lines.${index}.category`)} onPick={onPickItem} />
+        <ShelfHint kind={kind} metal={metal} category={watch(`lines.${index}.category`)} enteredG={line.physicalG} stockOf={stockOf} />
         <Field label="Weight" unit={en.units.g}>
           <AmountInput prefix="g" {...register(`lines.${index}.physicalG`)} inputMode="decimal" placeholder="0.000" />
         </Field>
@@ -371,25 +531,26 @@ function LineCard({ index, kind, register, watch, setValue, lastRate, onRemove }
           </Field>
         )}
         <div className="grid grid-cols-2 gap-2">
-          {kind === "SALE" && (
-            <Field label="Labour" unit={en.units.perGram}>
-              <Input {...register(`lines.${index}.labour`)} inputMode="decimal" placeholder="0.00" />
-            </Field>
-          )}
-          <div className={kind === "SALE" ? "" : "col-span-2"}>
-            <details>
-              <summary className="cursor-pointer pt-2 text-sm font-medium text-stone-500">{en.more}</summary>
-              <div className="flex flex-col gap-3 pt-2">
-                <Field label="Pieces (optional)">
-                  <Input {...register(`lines.${index}.itemCount`)} inputMode="numeric" placeholder="—" />
-                </Field>
-                <Field label="Tested tunch (optional)" unit={en.units.percent}>
-                  <Input {...register(`lines.${index}.recordedTunch`)} inputMode="decimal" placeholder="—" />
-                </Field>
-              </div>
-            </details>
-          </div>
+          <Field label="Pieces">
+            <Input {...register(`lines.${index}.itemCount`)} inputMode="numeric" placeholder={labourMode === "PER_PIECE" ? "required" : "—"} />
+          </Field>
+          <Field label="Tested tunch (optional)" unit={en.units.percent}>
+            <Input {...register(`lines.${index}.recordedTunch`)} inputMode="decimal" placeholder="—" />
+          </Field>
         </div>
+        <Field label="Labour (optional)">
+          <Segmented
+            options={["", "PER_PIECE", "PER_KG"] as const}
+            value={labourMode}
+            onChange={(m) => setValue(`lines.${index}.labourMode`, m)}
+            labels={{ "": "None", PER_PIECE: "Per piece", PER_KG: "Per kg" }}
+          />
+        </Field>
+        {labourMode && (
+          <Field label="Labour rate" unit={labourMode === "PER_PIECE" ? "₹/pc" : "₹/kg"}>
+            <AmountInput prefix="₹" {...register(`lines.${index}.labourRate`)} inputMode="decimal" placeholder="0.00" />
+          </Field>
+        )}
         {hint ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-900">{hint}</div> : null}
       </div>
     </Card>

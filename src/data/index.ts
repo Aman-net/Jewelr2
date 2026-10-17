@@ -3,10 +3,13 @@ export type {
   AppSettingRow,
   AuditEventRow,
   ConversionRow,
+  GeneratedBillRow,
   LedgerEntryRow,
   ManualDeltaRow,
+  MiscChargeRow,
   PartyRow,
   SettlementRow,
+  StockEntryRow,
   VoucherLineRow,
   VoucherRow,
 } from "./db.ts";
@@ -14,8 +17,10 @@ export { createParty, getParty, listParties, searchParties, updateParty } from "
 export type { CreatePartyInput, UpdatePartyPatch } from "./parties.ts";
 export {
   assembleVoucher,
+  assertRoleDirection,
   assertSingleOpening,
   getVoucher,
+  hasLiveOpening,
   listVouchers,
   postVoucher,
   readVoucher,
@@ -35,6 +40,10 @@ export {
   storedEntriesByVoucher,
 } from "./ledger.ts";
 export type { ActivityFilter, ActivityRow, LedgerFilter, LedgerRow } from "./ledger.ts";
+export { buildStatement, firstOfMonth, getStatement, listGeneratedBills, logGeneratedBill, prevDay, statementNo } from "./statement.ts";
+export type { LogBillInput, Statement, StatementRow } from "./statement.ts";
+export { getAllDuesSplits, getDuesSplit } from "./dues.ts";
+export type { DuesSplit } from "./dues.ts";
 export {
   APP_VERSION,
   BACKUP_FORMAT,
@@ -52,5 +61,23 @@ export {
 export type { BackupCounts, BackupFile } from "./backup.ts";
 export { getLastRate, setLastRate } from "./settings.ts";
 export type { LastRate } from "./settings.ts";
+export { EMPTY_SHOP, SHOP_KEY, getShopDetails, setShopDetails } from "./shop.ts";
+export type { ShopDetails } from "./shop.ts";
 export { PRESET_CATEGORIES, addCustom, deleteCustom, getCategorySuggestions, getCustoms, recordCategoryUse, renameCustom } from "./categories.ts";
 export type { CategorySuggestions } from "./categories.ts";
+export {
+  adjustStock,
+  aggregateStock,
+  checkShortSale,
+  clearItemCfg,
+  getItemCfg,
+  getStock,
+  getStockMoves,
+  isLowStock,
+  negateTradeStock,
+  recomputeTradeStock,
+  seedStock,
+  setItemCfg,
+  tradeRowsFor,
+} from "./stock.ts";
+export type { AdjustInput, ItemCfg, SeedItem, ShortLine, StockBucket, StockMove } from "./stock.ts";

@@ -78,3 +78,26 @@ textarea {
 .pop-in {
   animation: pop-in 0.35s ease-out;
 }
+
+@media print {
+  nav,
+  .bill-controls {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  .app-shell {
+    padding-bottom: 0;
+  }
+  .bill-sheet a {
+    text-decoration: none;
+    color: inherit;
+  }
+  .bill-sheet {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

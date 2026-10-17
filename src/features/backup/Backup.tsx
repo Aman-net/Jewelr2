@@ -6,6 +6,8 @@ import { STORAGE_KEY } from "../../lib/persist.ts";
 import { Button } from "../../components/ui/Button.tsx";
 import { Card, Page } from "../../components/ui/Card.tsx";
 import { CheckRow } from "../../components/ui/Field.tsx";
+import { SectionLabel } from "../../components/ui/Bits.tsx";
+import { ShopDetailsCard } from "../settings/Shop.tsx";
 import { CALCULATION_VERSION } from "../../domain/index.ts";
 import {
   APP_VERSION,
@@ -183,7 +185,10 @@ export function BackupPage() {
         </div>
       </div>
 
-      <div className="text-xs font-semibold uppercase tracking-widest text-stone-500">Restore</div>
+      {status ? <div className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">{status}</div> : null}
+      {error ? <div className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-800">{error}</div> : null}
+
+      <SectionLabel>Restore</SectionLabel>
       <Card>
         <div className="mb-2 text-sm font-medium text-stone-900">{en.backup.import}</div>
         <input
@@ -215,7 +220,8 @@ export function BackupPage() {
         )}
       </Card>
 
-      <div className="text-xs font-semibold uppercase tracking-widest text-stone-500">Master data</div>
+      <SectionLabel>Shop</SectionLabel>
+      <ShopDetailsCard />
       <Link to="/settings/items">
         <Card>
           <div className="flex items-center gap-3">
@@ -231,7 +237,7 @@ export function BackupPage() {
         </Card>
       </Link>
 
-      <div className="text-xs font-semibold uppercase tracking-widest text-stone-500">About this app</div>
+      <SectionLabel>About this app</SectionLabel>
       <Card>
         <InstallStatus />
         <div className="mt-2 flex flex-col gap-1 border-t border-stone-100 pt-2 text-xs text-stone-500">
@@ -247,9 +253,6 @@ export function BackupPage() {
           <div>Install the app to your home screen for the most durable storage.</div>
         </div>
       </Card>
-
-      {status ? <div className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">{status}</div> : null}
-      {error ? <div className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-800">{error}</div> : null}
     </Page>
   );
 }

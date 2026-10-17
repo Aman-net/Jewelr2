@@ -31,8 +31,17 @@ function lineToPrefill(l: SalePurchaseLine) {
     agreedTunch: scaledToPct(l.agreedTunchScaled),
     mode: l.pricingMode,
     rate: l.rateAmountPaise !== undefined ? paiseToRs(l.rateAmountPaise) : "",
-    labour: l.labourPaisePerGram !== undefined ? paiseToRs(l.labourPaisePerGram) : "",
+    labourMode: l.labourMode ?? "",
+    labourRate: l.labourRatePaise !== undefined ? paiseToRs(l.labourRatePaise) : "",
   };
+}
+
+function labourLine(l: SalePurchaseLine): string | null {
+  if (l.labourPaise <= 0) return null;
+  if (l.labourMode === "PER_PIECE") {
+    return `Labour (${l.itemCount ?? "?"} pcs × ${formatINR(l.labourRatePaise ?? 0)})`;
+  }
+  return `Labour (${formatGram(l.physicalMg)} × ${formatINR(l.labourRatePaise ?? 0)}/kg)`;
 }
 
 export function VoucherDetailPage() {
@@ -90,7 +99,13 @@ export function VoucherDetailPage() {
       const base = { correctedFrom: id, reason: reason.trim(), partyId: v.partyId, businessDate: v.businessDate };
       if (v.type === "SALE" || v.type === "PURCHASE") {
         navigate(`/vouchers/new/${v.type.toLowerCase()}`, {
-          state: { prefill: { ...base, lines: v.lines.map(lineToPrefill) } },
+          state: {
+            prefill: {
+              ...base,
+              lines: v.lines.map(lineToPrefill),
+              misc: v.misc.map((m) => ({ label: m.label, amount: paiseToRs(m.cashPaise) })),
+            },
+          },
         });
       } else if (v.type === "RECEIPT" || v.type === "PAYMENT") {
         const s = v.settlement;
@@ -121,6 +136,7 @@ export function VoucherDetailPage() {
               businessDate: v.businessDate,
               direction: c.direction,
               metal: c.metalType,
+              side: c.side,
               fineG: mgToG(c.fineMg),
               rate: paiseToRs(c.rateAmountPaise),
             },
@@ -203,12 +219,15 @@ export function VoucherDetailPage() {
                   <span className="font-semibold text-stone-900">{formatRate(l.rateAmountPaise, l.rateUnit)}</span>
                 </div>
               )}
-              {l.labourPaise > 0 && (
-                <div className="mt-1.5 flex items-center justify-between gap-2 px-1 text-sm font-semibold text-stone-700">
-                  <span>Labour ({formatGram(l.physicalMg)} × {formatINR(l.labourPaisePerGram ?? 0)}/g)</span>
-                  <span>{formatINR(l.labourPaise)}</span>
-                </div>
-              )}
+              {(() => {
+                const labour = labourLine(l);
+                return labour ? (
+                  <div className="mt-1.5 flex items-center justify-between gap-2 px-1 text-sm font-semibold text-stone-700">
+                    <span>{labour}</span>
+                    <span>{formatINR(l.labourPaise)}</span>
+                  </div>
+                ) : null;
+              })()}
             </div>
           ))}
           {v.settlement && (
@@ -245,11 +264,25 @@ export function VoucherDetailPage() {
           )}
           {v.conversion && (
             <div className="px-4 py-2.5 text-sm text-stone-700">
+              <span className="rounded-full bg-stone-200 px-2 py-0.5 text-[11px] font-bold text-stone-700">
+                {v.conversion.side === "PARTY_OWES" ? "Party owes" : "We owe"}
+              </span>{" "}
               {v.conversion.direction === "METAL_TO_CASH" ? "Metal → cash" : "Cash → metal"} ·{" "}
               <b>{formatGram(v.conversion.fineMg)}</b> {v.conversion.metalType} ⇄ <b>{formatINR(v.conversion.cashPaise)}</b>
               <div className="mt-1 text-stone-600">
                 Rate agreed <b className="text-stone-900">{formatRate(v.conversion.rateAmountPaise, v.conversion.rateUnit)}</b>
               </div>
+            </div>
+          )}
+          {v.misc.length > 0 && (
+            <div className="border-t border-dashed border-stone-200 px-4 py-2.5 text-sm text-stone-700">
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-stone-500">Extra charges</div>
+              {v.misc.map((m) => (
+                <div key={m.label} className="flex justify-between gap-2">
+                  <span>{m.label}</span>
+                  <b>{formatINR(m.cashPaise)}</b>
+                </div>
+              ))}
             </div>
           )}
         </div>

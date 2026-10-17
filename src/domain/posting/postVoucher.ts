@@ -1,6 +1,7 @@
 import { CALCULATION_VERSION } from "../version.ts";
 import { voucherInputSchema } from "../schemas.ts";
 import { GOLD_QUOTE_MG, SILVER_QUOTE_MG, fineToCash } from "../numeric/metalValue.ts";
+import { roundMetalMg } from "../numeric/rounding.ts";
 import { lineFineMg, selectBillingTunch, settlementFineMg } from "../rules/tunch.ts";
 import { computeLabour } from "../rules/labour.ts";
 import { settlementToDeltas } from "../rules/settlement.ts";
@@ -40,12 +41,20 @@ function snapshotLine(
   voucherId: string,
   index: number,
   line: SalePurchaseLineInput,
-  voucherType: "SALE" | "PURCHASE",
 ): SalePurchaseLine {
+  // Owner-confirmed whole-gram silver everywhere: a sub-gram line would round
+  // UP to 1 g silently. Block it instead — silver goods are weighed in grams.
+  if (line.metalType === "SILVER" && line.physicalMg < 1_000) {
+    throw new Error(
+      `Line ${index + 1}: silver below 1 g is not supported (whole-gram rule) — enter at least 1 g`,
+    );
+  }
   const billingTunch = selectBillingTunch(line.recordedTunchScaled, line.agreedTunchScaled);
-  const fineMg = lineFineMg(line.physicalMg, billingTunch);
-  // Labour on physical weight, cash only (PROVISIONAL Q5). Kept separate from lineCashPaise.
-  const labourPaise = computeLabour(line.physicalMg, line.labourPaisePerGram, voucherType);
+  // Canonical weights: silver rounds to whole grams at snapshot time.
+  const physicalMg = roundMetalMg(line.physicalMg, line.metalType);
+  const fineMg = lineFineMg(physicalMg, billingTunch, line.metalType);
+  // Labour is cash-only, per piece or per kg, sale and purchase (owner-confirmed).
+  const labourPaise = computeLabour(physicalMg, line.itemCount, line.labourMode, line.labourRatePaise);
   let lineCashPaise = 0;
   if (isCashPriced(line.pricingMode)) {
     if (line.rateAmountPaise === undefined || line.rateUnit === undefined) {
@@ -58,6 +67,7 @@ function snapshotLine(
     ...line,
     id: `${voucherId}#L${index}`,
     voucherId,
+    physicalMg,
     fineMg,
     labourPaise,
     lineCashPaise,
@@ -65,23 +75,44 @@ function snapshotLine(
 }
 
 function snapshotSettlement(s: SettlementInput): SettlementSnapshot {
+  // Same whole-gram silver guard as sale lines: receiving sub-gram silver
+  // would round UP to 1 g of fine silently.
+  if (s.silverPhysicalMg !== undefined && s.silverPhysicalMg > 0 && s.silverPhysicalMg < 1_000) {
+    throw new Error("Silver below 1 g is not supported (whole-gram rule) — enter at least 1 g");
+  }
+  if (s.goldPhysicalMg !== undefined && s.goldPhysicalMg > 0 && s.goldTunchScaled !== undefined && s.goldTunchScaled === 0) {
+    throw new Error("Gold received needs tunch above 0");
+  }
   return {
     ...s,
+    goldPhysicalMg: s.goldPhysicalMg !== undefined ? roundMetalMg(s.goldPhysicalMg, "GOLD") : undefined,
+    silverPhysicalMg: s.silverPhysicalMg !== undefined ? roundMetalMg(s.silverPhysicalMg, "SILVER") : undefined,
     goldFineMg:
       s.goldPhysicalMg && s.goldTunchScaled !== undefined
-        ? settlementFineMg(s.goldPhysicalMg, s.goldTunchScaled)
+        ? settlementFineMg(s.goldPhysicalMg, s.goldTunchScaled, "GOLD")
         : 0,
     silverFineMg:
       s.silverPhysicalMg && s.silverTunchScaled !== undefined
-        ? settlementFineMg(s.silverPhysicalMg, s.silverTunchScaled)
+        ? settlementFineMg(s.silverPhysicalMg, s.silverTunchScaled, "SILVER")
         : 0,
   };
 }
 
 function snapshotConversion(c: ConversionInput): ConversionInput & { cashPaise: number } {
   assertRateUnitMatches(c.metalType, c.rateUnit);
-  const cashPaise = fineToCash(c.fineMg, c.rateAmountPaise, quoteMgFor(c.rateUnit));
-  return { ...c, cashPaise };
+  // Cash derives from the rounded fine so the immutability guard stays exact.
+  const fineMg = roundMetalMg(c.fineMg, c.metalType);
+  const cashPaise = fineToCash(fineMg, c.rateAmountPaise, quoteMgFor(c.rateUnit));
+  return { ...c, fineMg, cashPaise };
+}
+
+/** Manual money/metal balances: silver rounds to whole grams at snapshot time. */
+function snapshotManual(d: BalanceDelta): BalanceDelta {
+  return {
+    cashPaise: d.cashPaise,
+    goldFineMg: roundMetalMg(d.goldFineMg, "GOLD"),
+    silverFineMg: roundMetalMg(d.silverFineMg, "SILVER"),
+  };
 }
 
 /**
@@ -94,6 +125,9 @@ export function buildVoucher(input: VoucherInput): Voucher {
   if (parsed.type === "SALE" || parsed.type === "PURCHASE") {
     if (!parsed.lines || parsed.lines.length === 0) throw new Error(`${parsed.type} requires lines`);
   }
+  if (parsed.misc && parsed.misc.length > 0 && parsed.type !== "SALE" && parsed.type !== "PURCHASE") {
+    throw new Error("Misc charges apply to SALE/PURCHASE only");
+  }
   if (parsed.type === "RECEIPT" || parsed.type === "PAYMENT") {
     const s = parsed.settlement;
     const total = (s?.cashPaise ?? 0) + (s?.goldPhysicalMg ?? 0) + (s?.silverPhysicalMg ?? 0);
@@ -102,14 +136,21 @@ export function buildVoucher(input: VoucherInput): Voucher {
   if (parsed.type === "CONVERSION" && !parsed.conversion) throw new Error("CONVERSION requires conversion");
   if (parsed.type === "OPENING" && !parsed.opening) throw new Error("OPENING requires opening");
   if (parsed.type === "ADJUSTMENT" && !parsed.adjustment) throw new Error("ADJUSTMENT requires adjustment");
+  // ADJUSTMENT moves balances by hand; the khata must explain itself.
+  if (parsed.type === "ADJUSTMENT" && !parsed.notes?.trim()) {
+    throw new Error("Add a reason in the notes for this adjustment");
+  }
   if (parsed.type === "REVERSAL" && (!parsed.reversesVoucherId || !parsed.reversalReason)) {
     throw new Error("REVERSAL requires reversesVoucherId and reversalReason");
   }
 
   const lines: SalePurchaseLine[] =
     parsed.type === "SALE" || parsed.type === "PURCHASE"
-      ? (parsed.lines ?? []).map((l, i) => snapshotLine(parsed.id, i, l, parsed.type as "SALE" | "PURCHASE"))
+      ? (parsed.lines ?? []).map((l, i) => snapshotLine(parsed.id, i, l))
       : [];
+  const misc = (parsed.type === "SALE" || parsed.type === "PURCHASE") && parsed.misc
+    ? parsed.misc.map((m) => ({ label: m.label, cashPaise: m.cashPaise }))
+    : [];
 
   return {
     id: parsed.id,
@@ -125,8 +166,9 @@ export function buildVoucher(input: VoucherInput): Voucher {
     lines,
     settlement: parsed.settlement ? snapshotSettlement(parsed.settlement) : null,
     conversion: parsed.conversion ? snapshotConversion(parsed.conversion) : null,
-    opening: parsed.opening ? { ...parsed.opening } : null,
-    adjustment: parsed.adjustment ? { ...parsed.adjustment } : null,
+    opening: parsed.opening ? snapshotManual(parsed.opening) : null,
+    adjustment: parsed.adjustment ? snapshotManual(parsed.adjustment) : null,
+    misc,
     createdAt: parsed.createdAt,
   };
 }
@@ -144,27 +186,40 @@ function saleDeltas(v: Voucher): BalanceDelta {
       d.cashPaise += l.labourPaise;
     }
   }
+  for (const m of v.misc) d.cashPaise += m.cashPaise;
   return d;
 }
 
+/**
+ * Conversion with an explicit side (owner-confirmed 2026-10-15).
+ * The picked side's due shrinks; the other column grows by the equivalent.
+ * - METAL_TO_CASH + PARTY_OWES: metal −Y, cash +X (rate fixed on metal dues).
+ * - METAL_TO_CASH + SHOP_OWES: metal +Y, cash −X (shop's metal debt becomes cash debt).
+ * - CASH_TO_METAL mirrors both.
+ */
 function conversionDeltas(v: Voucher): BalanceDelta {
   const c = v.conversion;
   if (!c) throw new Error("CONVERSION voucher missing conversion snapshot");
   // Verify the snapshot matches the stored rate (rate immutability guard).
   const expected = fineToCash(c.fineMg, c.rateAmountPaise, quoteMgFor(c.rateUnit));
   if (expected !== c.cashPaise) throw new Error("Conversion snapshot inconsistent with stored rate");
+  const s = c.side === "PARTY_OWES" ? 1 : -1;
+  const metal = c.metalType === "GOLD" ? c.fineMg : 0;
+  const silver = c.metalType === "SILVER" ? c.fineMg : 0;
+  // sz() keeps -0 out of stored deltas (exact-equality tests distinguish it).
+  const sz = (n: number): number => (n === 0 ? 0 : n);
   if (c.direction === "METAL_TO_CASH") {
+    // Primary (metal) shrinks on the picked side; cash grows by the equivalent.
     return {
-      cashPaise: c.cashPaise,
-      goldFineMg: c.metalType === "GOLD" ? -c.fineMg : 0,
-      silverFineMg: c.metalType === "SILVER" ? -c.fineMg : 0,
+      cashPaise: s * c.cashPaise,
+      goldFineMg: sz(-s * metal),
+      silverFineMg: sz(-s * silver),
     };
   }
-  // CASH_TO_METAL: cash owed is reduced, metal owed grows by the fine equivalent.
   return {
-    cashPaise: -c.cashPaise,
-    goldFineMg: c.metalType === "GOLD" ? c.fineMg : 0,
-    silverFineMg: c.metalType === "SILVER" ? c.fineMg : 0,
+    cashPaise: -s * c.cashPaise,
+    goldFineMg: sz(s * metal),
+    silverFineMg: sz(s * silver),
   };
 }
 

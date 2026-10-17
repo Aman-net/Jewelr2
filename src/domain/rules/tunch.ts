@@ -1,4 +1,6 @@
 import { fineFromPhysical } from "../numeric/tunch.ts";
+import { roundMetalMg } from "../numeric/rounding.ts";
+import type { MetalType } from "../types.ts";
 
 /**
  * PROVISIONAL rule Q2 — which tunch bills the party.
@@ -12,12 +14,12 @@ export function selectBillingTunch(recordedTunchScaled: number | undefined, agre
   return agreedTunchScaled;
 }
 
-/** Fine owed on a sale/purchase line. */
-export function lineFineMg(physicalMg: number, agreedTunchScaled: number): number {
-  return fineFromPhysical(physicalMg, agreedTunchScaled);
+/** Fine owed on a sale/purchase line. Silver rounds to whole grams. */
+export function lineFineMg(physicalMg: number, agreedTunchScaled: number, metalType: MetalType): number {
+  return roundMetalMg(fineFromPhysical(roundMetalMg(physicalMg, metalType), agreedTunchScaled), metalType);
 }
 
-/** Fine credited when metal is received/paid with a tested tunch. */
-export function settlementFineMg(physicalMg: number, testedTunchScaled: number): number {
-  return fineFromPhysical(physicalMg, testedTunchScaled);
+/** Fine credited when metal is received/paid with a tested tunch. Silver rounds to whole grams. */
+export function settlementFineMg(physicalMg: number, testedTunchScaled: number, metalType: MetalType): number {
+  return roundMetalMg(fineFromPhysical(roundMetalMg(physicalMg, metalType), testedTunchScaled), metalType);
 }

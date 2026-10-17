@@ -5,17 +5,20 @@ import type {
   AppSettingRow,
   AuditEventRow,
   ConversionRow,
+  GeneratedBillRow,
   JewelrDb,
   LedgerEntryRow,
   ManualDeltaRow,
+  MiscChargeRow,
   PartyRow,
   SettlementRow,
+  StockEntryRow,
   VoucherLineRow,
   VoucherRow,
 } from "./db.ts";
 
 export const BACKUP_FORMAT = "jewelr2-backup" as const;
-export const BACKUP_SCHEMA_VERSION = 1;
+export const BACKUP_SCHEMA_VERSION = 3;
 export const APP_VERSION = "0.1.0";
 export const LAST_BACKUP_KEY = "lastBackupAt";
 
@@ -34,6 +37,9 @@ const backupSchema = z.object({
     settlements: z.array(rowWithId),
     conversions: z.array(rowWithId),
     manual_deltas: z.array(rowWithId),
+    misc_charges: z.array(rowWithId),
+    stock_entries: z.array(rowWithId).default([]),
+    generated_bills: z.array(rowWithId).default([]),
     ledger_entries: z.array(rowWithId),
     audit_events: z.array(rowWithId),
     app_settings: z.array(settingRow),
@@ -52,6 +58,9 @@ export interface BackupFile {
     settlements: SettlementRow[];
     conversions: ConversionRow[];
     manual_deltas: ManualDeltaRow[];
+    misc_charges: MiscChargeRow[];
+    stock_entries: StockEntryRow[];
+    generated_bills: GeneratedBillRow[];
     ledger_entries: LedgerEntryRow[];
     audit_events: AuditEventRow[];
     app_settings: AppSettingRow[];
@@ -66,7 +75,7 @@ export function parseBackup(json: unknown): BackupFile {
   if (!parsed.success) {
     throw new BackupError(`Invalid backup file: ${parsed.error.issues[0]?.message ?? "schema mismatch"}`);
   }
-  if (parsed.data.schemaVersion !== BACKUP_SCHEMA_VERSION) {
+  if (![1, 2, BACKUP_SCHEMA_VERSION].includes(parsed.data.schemaVersion)) {
     throw new BackupError(
       `Incompatible backup schemaVersion ${parsed.data.schemaVersion} (this app reads ${BACKUP_SCHEMA_VERSION}). ` +
         `Export a fresh backup from the version that created this file.`,
@@ -82,6 +91,9 @@ export interface BackupCounts {
   settlements: number;
   conversions: number;
   manual_deltas: number;
+  misc_charges: number;
+  stock_entries: number;
+  generated_bills: number;
   ledger_entries: number;
   audit_events: number;
 }
@@ -94,6 +106,9 @@ function countsOf(t: BackupFile["tables"]): BackupCounts {
     settlements: t.settlements.length,
     conversions: t.conversions.length,
     manual_deltas: t.manual_deltas.length,
+    misc_charges: t.misc_charges.length,
+    stock_entries: (t.stock_entries ?? []).length,
+    generated_bills: (t.generated_bills ?? []).length,
     ledger_entries: t.ledger_entries.length,
     audit_events: t.audit_events.length,
   };
@@ -112,7 +127,7 @@ export function previewBackup(json: unknown): { counts: BackupCounts; partyNames
 
 /** Full versioned JSON export of every table. Stamps lastBackupAt. */
 export async function exportBackup(dbx: JewelrDb = db): Promise<BackupFile> {
-  const [parties, vouchers, voucher_lines, settlements, conversions, manual_deltas, ledger_entries, audit_events] =
+  const [parties, vouchers, voucher_lines, settlements, conversions, manual_deltas, misc_charges, stock_entries, generated_bills, ledger_entries, audit_events] =
     await Promise.all([
       dbx.parties.toArray(),
       dbx.vouchers.toArray(),
@@ -120,6 +135,9 @@ export async function exportBackup(dbx: JewelrDb = db): Promise<BackupFile> {
       dbx.settlements.toArray(),
       dbx.conversions.toArray(),
       dbx.manual_deltas.toArray(),
+      dbx.misc_charges.toArray(),
+      dbx.stock_entries.toArray(),
+      dbx.generated_bills.toArray(),
       dbx.ledger_entries.toArray(),
       dbx.audit_events.toArray(),
     ]);
@@ -138,6 +156,9 @@ export async function exportBackup(dbx: JewelrDb = db): Promise<BackupFile> {
       settlements,
       conversions,
       manual_deltas,
+      misc_charges,
+      stock_entries,
+      generated_bills,
       ledger_entries,
       audit_events,
       app_settings: settings,
@@ -146,7 +167,7 @@ export async function exportBackup(dbx: JewelrDb = db): Promise<BackupFile> {
 }
 
 async function tableCounts(dbx: JewelrDb): Promise<BackupCounts> {
-  const [parties, vouchers, voucher_lines, settlements, conversions, manual_deltas, ledger_entries, audit_events] =
+  const [parties, vouchers, voucher_lines, settlements, conversions, manual_deltas, misc_charges, stock_entries, generated_bills, ledger_entries, audit_events] =
     await Promise.all([
       dbx.parties.count(),
       dbx.vouchers.count(),
@@ -154,10 +175,13 @@ async function tableCounts(dbx: JewelrDb): Promise<BackupCounts> {
       dbx.settlements.count(),
       dbx.conversions.count(),
       dbx.manual_deltas.count(),
+      dbx.misc_charges.count(),
+      dbx.stock_entries.count(),
+      dbx.generated_bills.count(),
       dbx.ledger_entries.count(),
       dbx.audit_events.count(),
     ]);
-  return { parties, vouchers, voucher_lines, settlements, conversions, manual_deltas, ledger_entries, audit_events };
+  return { parties, vouchers, voucher_lines, settlements, conversions, manual_deltas, misc_charges, stock_entries, generated_bills, ledger_entries, audit_events };
 }
 
 async function writeBackupTables(dbx: JewelrDb, backup: BackupFile): Promise<void> {
@@ -171,6 +195,9 @@ async function writeBackupTables(dbx: JewelrDb, backup: BackupFile): Promise<voi
       dbx.settlements,
       dbx.conversions,
       dbx.manual_deltas,
+      dbx.misc_charges,
+      dbx.stock_entries,
+      dbx.generated_bills,
       dbx.ledger_entries,
       dbx.audit_events,
       dbx.app_settings,
@@ -182,6 +209,9 @@ async function writeBackupTables(dbx: JewelrDb, backup: BackupFile): Promise<voi
       if (t.settlements.length > 0) await dbx.settlements.bulkAdd(t.settlements);
       if (t.conversions.length > 0) await dbx.conversions.bulkAdd(t.conversions);
       if (t.manual_deltas.length > 0) await dbx.manual_deltas.bulkAdd(t.manual_deltas);
+      if (t.misc_charges.length > 0) await dbx.misc_charges.bulkAdd(t.misc_charges);
+      if ((t.stock_entries ?? []).length > 0) await dbx.stock_entries.bulkAdd(t.stock_entries ?? []);
+      if ((t.generated_bills ?? []).length > 0) await dbx.generated_bills.bulkAdd(t.generated_bills ?? []);
       if (t.ledger_entries.length > 0) await dbx.ledger_entries.bulkAdd(t.ledger_entries);
       if (t.audit_events.length > 0) await dbx.audit_events.bulkAdd(t.audit_events);
       if (t.app_settings.length > 0) await dbx.app_settings.bulkPut(t.app_settings);
@@ -216,6 +246,9 @@ export async function checkIntegrity(
     settlements: live.settlements,
     conversions: live.conversions,
     manual_deltas: live.manual_deltas,
+    misc_charges: live.misc_charges,
+    stock_entries: live.stock_entries,
+    generated_bills: live.generated_bills,
     ledger_entries: live.ledger_entries,
     audit_events: live.audit_events,
   };
@@ -266,6 +299,9 @@ export async function replaceWithBackup(
       dbx.settlements,
       dbx.conversions,
       dbx.manual_deltas,
+      dbx.misc_charges,
+      dbx.stock_entries,
+      dbx.generated_bills,
       dbx.ledger_entries,
       dbx.audit_events,
       dbx.app_settings,
@@ -279,6 +315,9 @@ export async function replaceWithBackup(
           dbx.settlements,
           dbx.conversions,
           dbx.manual_deltas,
+          dbx.misc_charges,
+          dbx.stock_entries,
+          dbx.generated_bills,
           dbx.ledger_entries,
           dbx.audit_events,
           dbx.app_settings,

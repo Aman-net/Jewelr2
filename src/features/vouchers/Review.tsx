@@ -1,7 +1,7 @@
 import { Button } from "../../components/ui/Button.tsx";
 import { BalanceGrid } from "../../components/ui/Card.tsx";
 import { MetalTag } from "../../components/ui/TypeTag.tsx";
-import type { Voucher } from "../../domain/index.ts";
+import type { SalePurchaseLine, Voucher } from "../../domain/index.ts";
 import { formatGram, formatINR, formatRate, formatTunch } from "../../lib/format.ts";
 import { en } from "../../i18n/en.ts";
 import { cn } from "../../lib/cn.ts";
@@ -16,6 +16,17 @@ const DOT: Record<string, string> = {
   ADJUSTMENT: "bg-stone-500",
   REVERSAL: "bg-red-600",
 };
+
+/** Human basis for a stored labour snapshot: "(4 pcs × ₹25)" / "(100 g × ₹50/kg)". */
+function labourBasis(l: SalePurchaseLine): string {
+  if (l.labourMode === "PER_PIECE") {
+    return ` (${l.itemCount ?? "?"} pcs × ${formatINR(l.labourRatePaise ?? 0)})`;
+  }
+  if (l.labourMode === "PER_KG") {
+    return ` (${formatGram(l.physicalMg)} × ${formatINR(l.labourRatePaise ?? 0)}/kg)`;
+  }
+  return "";
+}
 
 /** Review-before-post as a shop receipt: dashed sections, explicit totals. */
 export function Review({ voucher, cash, gold, silver, partyName, posting, error, onBack, onConfirm }: {
@@ -53,7 +64,7 @@ export function Review({ voucher, cash, gold, silver, partyName, posting, error,
             </div>
             <div className="text-stone-600">
               {l.pricingMode === "CASH_AT_RATE" ? <b>{formatINR(l.lineCashPaise)}</b> : "Owes metal — rate fixed later"}
-              {l.labourPaise > 0 ? <> · labour {formatINR(l.labourPaise)}</> : null}
+              {l.labourPaise > 0 ? <> · labour {formatINR(l.labourPaise)}{labourBasis(l)}</> : null}
             </div>
             {l.pricingMode === "CASH_AT_RATE" && l.rateAmountPaise !== undefined && l.rateUnit && (
               <div className="text-stone-600">
@@ -86,11 +97,23 @@ export function Review({ voucher, cash, gold, silver, partyName, posting, error,
         )}
         {voucher.conversion && (
           <div className="border-t border-dashed border-stone-300 px-4 py-2.5 text-sm text-stone-700">
+            {voucher.conversion.side === "PARTY_OWES" ? "Party owes" : "We owe"} ·{" "}
             {voucher.conversion.direction === "METAL_TO_CASH" ? "Metal → cash" : "Cash → metal"} ·{" "}
             <b>{formatGram(voucher.conversion.fineMg)}</b> {voucher.conversion.metalType} ⇄ <b>{formatINR(voucher.conversion.cashPaise)}</b>
             <div className="text-stone-600">
               Rate agreed <b className="text-stone-900">{formatRate(voucher.conversion.rateAmountPaise, voucher.conversion.rateUnit)}</b>
             </div>
+          </div>
+        )}
+        {voucher.misc.length > 0 && (
+          <div className="border-t border-dashed border-stone-300 px-4 py-2.5 text-sm text-stone-700">
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-stone-500">Extra charges</div>
+            {voucher.misc.map((m) => (
+              <div key={m.label} className="flex justify-between gap-2">
+                <span>{m.label}</span>
+                <b>{formatINR(m.cashPaise)}</b>
+              </div>
+            ))}
           </div>
         )}
       </div>

@@ -78,6 +78,7 @@ describe("postVoucher", () => {
         conversion: {
           direction: "METAL_TO_CASH",
           metalType: "GOLD",
+          side: "PARTY_OWES",
           fineMg: 10_000,
           rateAmountPaise: 12_000_000,
           rateUnit: "GOLD_PER_10G",
@@ -103,6 +104,7 @@ describe("postVoucher", () => {
         type: "ADJUSTMENT",
         partyId,
         businessDate: "2026-01-13",
+        notes: "Cash dust after exchange",
         adjustment: { cashPaise: -50, goldFineMg: 0, silverFineMg: 0 },
       },
       tdb,
@@ -144,6 +146,37 @@ describe("postVoucher", () => {
       tdb,
     );
     expect(second.entry.cashDeltaPaise).toBe(120_000);
+  });
+
+  it("enforces role direction: customers buy, suppliers sell", async () => {
+    const customer = (await createParty({ name: "Cust", isCustomer: true, isSupplier: false }, tdb)).party;
+    const supplier = (await createParty({ name: "Supp", isCustomer: false, isSupplier: true }, tdb)).party;
+    const line = {
+      metalType: "SILVER" as const,
+      categoryName: "Payal",
+      physicalMg: 1000,
+      agreedTunchScaled: 8000,
+      pricingMode: "METAL_OPEN" as const,
+    };
+    await expect(
+      postVoucher({ type: "PURCHASE", partyId: customer.id, businessDate: "2026-01-10", lines: [line] }, tdb),
+    ).rejects.toThrow(/not a supplier/);
+    await expect(
+      postVoucher({ type: "SALE", partyId: supplier.id, businessDate: "2026-01-10", lines: [line] }, tdb),
+    ).rejects.toThrow(/not a customer/);
+    // Correct directions pass; money flows ignore roles.
+    await postVoucher({ type: "SALE", partyId: customer.id, businessDate: "2026-01-10", lines: [line] }, tdb);
+    await postVoucher({ type: "PURCHASE", partyId: supplier.id, businessDate: "2026-01-10", lines: [line] }, tdb);
+    await postVoucher(
+      { type: "RECEIPT", partyId: supplier.id, businessDate: "2026-01-10", settlement: { cashPaise: 100 } },
+      tdb,
+    );
+    await expect(
+      postVoucher(
+        { type: "SALE", partyId: "00000000-0000-4000-8000-000000000000", businessDate: "2026-01-10", lines: [line] },
+        tdb,
+      ),
+    ).rejects.toThrow(/Unknown party/);
   });
 
   it("is idempotent: reposting an id is a no-op returning the stored voucher", async () => {
@@ -224,6 +257,49 @@ describe("postVoucher", () => {
     const reread = await getVoucher(first.voucher.id, tdb);
     expect(reread?.voucher.lines[0]?.lineCashPaise).toBe(10_000_000);
     expect(reread?.entry.cashDeltaPaise).toBe(10_000_000);
+  });
+
+  it("posts shop-owes conversions and persists misc charges", async () => {
+    const conv = await postVoucher(
+      {
+        type: "CONVERSION",
+        partyId,
+        businessDate: "2026-01-12",
+        conversion: {
+          direction: "CASH_TO_METAL",
+          metalType: "GOLD",
+          side: "SHOP_OWES",
+          fineMg: 5_000,
+          rateAmountPaise: 10_000_000,
+          rateUnit: "GOLD_PER_10G",
+        },
+      },
+      tdb,
+    );
+    expect(conv.entry).toMatchObject({ cashDeltaPaise: 5_000_000, goldFineDeltaMg: -5_000 });
+
+    const sale = await postVoucher(
+      {
+        type: "SALE",
+        partyId,
+        businessDate: "2026-01-13",
+        lines: [
+          {
+            metalType: "SILVER",
+            categoryName: "Payal",
+            physicalMg: 10_000,
+            agreedTunchScaled: 8000,
+            pricingMode: "METAL_OPEN",
+          },
+        ],
+        misc: [{ label: "Packing", cashPaise: 250 }],
+      },
+      tdb,
+    );
+    expect(sale.entry.cashDeltaPaise).toBe(250);
+    const reread = await getVoucher(sale.voucher.id, tdb);
+    expect(reread?.voucher.misc).toEqual([{ label: "Packing", cashPaise: 250 }]);
+    expect(await tdb.misc_charges.count()).toBe(1);
   });
 });
 

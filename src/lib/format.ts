@@ -31,16 +31,16 @@ export function formatRate(ratePaise: number, unit: "GOLD_PER_10G" | "SILVER_PER
   return `${formatINR(ratePaise)} per ${unit === "GOLD_PER_10G" ? "10 g" : "kg"}`;
 }
 
-/** Parse user-typed grams ("12.345") → integer mg. Throws on invalid. */
+/** Parse user-typed grams ("12.345") → integer mg. Throws on invalid. Commas tolerated (live-grouped input). */
 export function parseGramsToMg(raw: string): number {
-  const v = new Decimal(raw.trim());
+  const v = new Decimal(raw.trim().replace(/,/g, ""));
   if (!v.isFinite() || v.isNegative()) throw new Error(`Invalid weight: ${raw}`);
   return v.mul(1000).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
 }
 
-/** Parse rupees ("1500.50") → integer paise. */
+/** Parse rupees ("1500.50") → integer paise. Commas tolerated (live-grouped input). */
 export function parseRupeesToPaise(raw: string, allowNegative = false): number {
-  const v = new Decimal(raw.trim());
+  const v = new Decimal(raw.trim().replace(/,/g, ""));
   if (!v.isFinite() || (!allowNegative && v.isNegative())) throw new Error(`Invalid amount: ${raw}`);
   return v.mul(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
 }
@@ -68,7 +68,18 @@ export function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
 }
 
-/** Khata-style day header: Today / Yesterday / 12 Jan 2026. */export function dayLabel(yyyyMmDd: string): string {
+/** Absolute date, never relative: 12 Jan 2026. Use on bills/prints viewed later. */
+export function formatDate(yyyyMmDd: string): string {
+  const [yy, mm, dd] = yyyyMmDd.split("-").map(Number);
+  return new Date(yy ?? 0, (mm ?? 1) - 1, dd ?? 1).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/** Khata-style day header: Today / Yesterday / 12 Jan 2026. */
+export function dayLabel(yyyyMmDd: string): string {
   const today = todayLocal();
   if (yyyyMmDd === today) return "Today";
   const y = new Date();

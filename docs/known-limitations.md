@@ -13,8 +13,9 @@
   abandoning the replacement form leaves a clean reversal (no half-correction).
 - UI primitives are a minimal shadcn-style set (Button/Field/Card), not the
   full shadcn/ui component library.
-- `ADJUSTMENT` posting (explicit manual delta) is an agent assumption; the
-  brief defines no rule for it.
+- `ADJUSTMENT` (explicit manual delta) is an agent assumption; the brief
+  defines no rule for it. It now requires a reason in `notes` and the
+  khata renders it as a visible manual-change entry.
 - Rate-unit mismatch (gold vs `SILVER_PER_KG` etc.) throws; mixed-metal
   conversions (gold-for-silver) are rejected as out of scope.
 - `REVERSAL` domain support is `negateDeltas()` + original-date rule only;

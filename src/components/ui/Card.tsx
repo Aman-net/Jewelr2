@@ -34,7 +34,8 @@ const TONES = {
   dark: { get: "text-emerald-300", give: "text-red-300", goldGet: "text-amber-300", silverGet: "text-slate-200" },
 } as const;
 
-/** Three-column money/metal readout with equal weight. Positive = party owes shop. */
+/** Three-column money/metal readout with equal weight. Positive = party owes shop.
+ * Signed always: + means you get, − means you give. Color is never the only signal. */
 export function BalanceGrid({ cashPaise, goldFineMg, silverFineMg, dark }: {
   cashPaise: number;
   goldFineMg: number;
@@ -44,24 +45,27 @@ export function BalanceGrid({ cashPaise, goldFineMg, silverFineMg, dark }: {
   const t = dark ? TONES.dark : TONES.light;
   const muted = "text-stone-400";
   const faint = dark ? "text-stone-300" : "text-stone-500";
+  const signedCash = cashPaise === 0 ? formatINR(0) : `${cashPaise > 0 ? "+" : "−"}${formatINR(Math.abs(cashPaise))}`;
+  const signedGold = goldFineMg === 0 ? formatGram(0) : `${goldFineMg > 0 ? "+" : "−"}${formatGram(Math.abs(goldFineMg))}`;
+  const signedSilver = silverFineMg === 0 ? formatGram(0) : `${silverFineMg > 0 ? "+" : "−"}${formatGram(Math.abs(silverFineMg))}`;
   const cells: { label: string; dot?: string; value: string; sub: string; tone: string }[] = [
     {
       label: "Cash",
-      value: formatINR(Math.abs(cashPaise)),
+      value: signedCash,
       sub: cashPaise === 0 ? "settled" : cashPaise > 0 ? "you get" : "you give",
       tone: cashPaise === 0 ? "" : cashPaise > 0 ? t.get : t.give,
     },
     {
       label: "Gold fine",
       dot: "bg-amber-500",
-      value: formatGram(Math.abs(goldFineMg)),
+      value: signedGold,
       sub: goldFineMg === 0 ? "settled" : goldFineMg > 0 ? "you get" : "you give",
       tone: goldFineMg === 0 ? "" : goldFineMg > 0 ? t.goldGet : t.give,
     },
     {
       label: "Silver fine",
       dot: "bg-slate-400",
-      value: formatGram(Math.abs(silverFineMg)),
+      value: signedSilver,
       sub: silverFineMg === 0 ? "settled" : silverFineMg > 0 ? "you get" : "you give",
       tone: silverFineMg === 0 ? "" : silverFineMg > 0 ? t.silverGet : t.give,
     },

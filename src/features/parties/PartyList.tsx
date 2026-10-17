@@ -4,7 +4,7 @@ import { Card, Page } from "../../components/ui/Card.tsx";
 import { EmptyState } from "../../components/ui/Bits.tsx";
 import { PartyAvatar } from "../../components/ui/PartyAvatar.tsx";
 import { RoleTags } from "../../components/ui/TypeTag.tsx";
-import { Input } from "../../components/ui/Field.tsx";
+import { SearchInput } from "../../components/ui/Field.tsx";
 import { usePartyList } from "../../hooks/useLive.ts";
 import { en } from "../../i18n/en.ts";
 import { useState } from "react";
@@ -24,7 +24,7 @@ export function PartyListPage() {
       title={en.party.title}
       action={<Link to="/parties/new"><Button>{en.party.add}</Button></Link>}
     >
-      <Input placeholder={en.party.search} value={q} onChange={(e) => setQ(e.target.value)} inputMode="search" />
+      <SearchInput placeholder={en.party.search} value={q} onChange={(e) => setQ(e.target.value)} inputMode="search" />
       {parties !== undefined && matches.length === 0 && (
         <EmptyState
           title="No parties here"

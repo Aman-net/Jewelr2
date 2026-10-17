@@ -1,7 +1,8 @@
 import { Suspense, lazy } from "react";
 import type { ReactNode } from "react";
-import { Navigate, RouterProvider, createHashRouter, useNavigate, useParams } from "react-router";
+import { Navigate, RouterProvider, createHashRouter, useLocation, useNavigate, useParams } from "react-router";
 import { Shell } from "../components/layout/Shell.tsx";
+import { AppErrorBoundary } from "../components/ui/ErrorBoundary.tsx";
 import { HomePage } from "../features/home/Home.tsx";
 import { KhataPage } from "../features/parties/Khata.tsx";
 import { PartyEditPage } from "../features/parties/PartyEdit.tsx";
@@ -20,6 +21,10 @@ const BackupPage = lazy(() => import("../features/backup/Backup.tsx").then((m) =
 const SummaryPage = lazy(() => import("../features/summary/Summary.tsx").then((m) => ({ default: m.SummaryPage })));
 const ItemsPage = lazy(() => import("../features/settings/Items.tsx").then((m) => ({ default: m.ItemsPage })));
 const DetailPage = lazy(() => import("../features/vouchers/VoucherDetail.tsx").then((m) => ({ default: m.VoucherDetailPage })));
+const BillPage = lazy(() => import("../features/bills/Bill.tsx").then((m) => ({ default: m.BillPage })));
+const StockPage = lazy(() => import("../features/stock/Stock.tsx").then((m) => ({ default: m.StockPage })));
+const StockItemPage = lazy(() => import("../features/stock/Stock.tsx").then((m) => ({ default: m.StockItemPage })));
+const StockMovePage = lazy(() => import("../features/stock/Stock.tsx").then((m) => ({ default: m.StockMovePage })));
 
 function deferred(node: ReactNode) {
   return (
@@ -44,7 +49,7 @@ function deferred(node: ReactNode) {
  */
 const router = createHashRouter([
   {
-    element: <Shell />,
+    element: <BoundShell />,
     children: [
       { index: true, element: <HomePage /> },
       { path: "parties", element: <PartyListPage /> },
@@ -52,6 +57,10 @@ const router = createHashRouter([
       { path: "parties/:id", element: <KhataPage /> },
       { path: "parties/:id/edit", element: <PartyEditPage /> },
       { path: "parties/:id/ledger", element: <LedgerRedirect /> },
+      { path: "parties/:id/bill", element: deferred(<BillPage />) },
+      { path: "stock", element: deferred(<StockPage />) },
+      { path: "stock/item", element: deferred(<StockItemPage />) },
+      { path: "stock/move", element: deferred(<StockMovePage />) },
       { path: "vouchers/new", element: <NewEntryPicker /> },
       { path: "vouchers/new/sale", element: <SalePurchaseForm kind="SALE" /> },
       { path: "vouchers/new/purchase", element: <SalePurchaseForm kind="PURCHASE" /> },
@@ -75,6 +84,16 @@ export function Router() {
 function PartyNewWrapper() {
   const navigate = useNavigate();
   return <PartyNewPage onDone={(id, dup) => navigate(`/parties/${id}`, { state: { duplicateName: dup } })} />;
+}
+
+/** Boundary keyed by route: navigating away from a crash clears it. */
+function BoundShell() {
+  const location = useLocation();
+  return (
+    <AppErrorBoundary key={location.pathname}>
+      <Shell />
+    </AppErrorBoundary>
+  );
 }
 
 function LedgerRedirect() {

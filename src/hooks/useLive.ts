@@ -3,6 +3,7 @@ import {
   getAllBalances,
   getBalances,
   getLedger,
+  getStock,
   listParties,
   listVouchers,
 } from "../data/index.ts";
@@ -28,6 +29,11 @@ export function useBalancesLive(partyId: string | undefined) {
 
 export function useAllBalancesLive() {
   return useLiveQuery(() => getAllBalances(), []);
+}
+
+/** Live shop stock buckets for hints, warnings, and the stock screen. */
+export function useStockLive() {
+  return useLiveQuery(() => getStock(), []);
 }
 
 export function useRecentVouchersLive(limit = 10, filter: VoucherFilter = {}) {

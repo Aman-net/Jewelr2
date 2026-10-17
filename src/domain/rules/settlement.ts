@@ -10,11 +10,11 @@ import { settlementFineMg } from "./tunch.ts";
 export function settlementToDeltas(s: SettlementInput): BalanceDelta {
   const goldFineMg =
     s.goldPhysicalMg && s.goldTunchScaled !== undefined
-      ? settlementFineMg(s.goldPhysicalMg, s.goldTunchScaled)
+      ? settlementFineMg(s.goldPhysicalMg, s.goldTunchScaled, "GOLD")
       : 0;
   const silverFineMg =
     s.silverPhysicalMg && s.silverTunchScaled !== undefined
-      ? settlementFineMg(s.silverPhysicalMg, s.silverTunchScaled)
+      ? settlementFineMg(s.silverPhysicalMg, s.silverTunchScaled, "SILVER")
       : 0;
   return {
     cashPaise: s.cashPaise ?? 0,

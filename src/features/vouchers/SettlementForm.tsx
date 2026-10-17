@@ -8,12 +8,15 @@ import { AmountInput, Field, Input, Textarea } from "../../components/ui/Field.t
 import { FlowHeader, StickyCta, type FlowTone } from "../../components/ui/Flow.tsx";
 import { useLeaveGuard } from "../../hooks/useLeaveGuard.tsx";
 import { SuccessView } from "../../components/ui/Success.tsx";
+import { MetalTag } from "../../components/ui/TypeTag.tsx";
+import { SHOP_ID } from "../../data/db.ts";
 import { postVoucher } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import type { BalanceDelta, PaymentMode, Voucher } from "../../domain/index.ts";
 import { usePartyList } from "../../hooks/useLive.ts";
 import { en } from "../../i18n/en.ts";
-import { parseGramsToMg, parsePercentToScaled, parseRupeesToPaise, todayLocal } from "../../lib/format.ts";
+import { formatGram, parseGramsToMg, parsePercentToScaled, parseRupeesToPaise, todayLocal } from "../../lib/format.ts";
+import { settlementFineMg } from "../../domain/rules/tunch.ts";
 import { uuid } from "../../lib/uuid.ts";
 import { PartyPicker } from "./fields.tsx";
 import { Review } from "./Review.tsx";
@@ -32,6 +35,17 @@ interface Form {
 }
 
 const TUNCH_SHORTCUTS = ["70", "75", "80", "85", "91.6", "100"];
+
+/** Live fine preview for one metal: weight × tunch → fine, or null when incomplete. */
+function metalPreview(metal: "GOLD" | "SILVER", weightG: string, tunch: string): string | null {
+  try {
+    if (!weightG.trim() || !tunch.trim()) return null;
+    const fine = settlementFineMg(parseGramsToMg(weightG), parsePercentToScaled(tunch), metal);
+    return `→ ${formatGram(fine)} fine`;
+  } catch {
+    return null;
+  }
+}
 
 export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
   const navigate = useNavigate();
@@ -62,7 +76,9 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
     },
   });
   const partyId = watch("partyId");
+  const goldG = watch("goldG");
   const goldTunch = watch("goldTunch");
+  const silverG = watch("silverG");
   const silverTunch = watch("silverTunch");
   const partyName = (partyList ?? []).find((p) => p.id === partyId)?.name ?? "";
   const title = kind === "RECEIPT" ? "Got payment" : "Paid out";
@@ -91,7 +107,7 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
       }
       const built = buildVoucher({
         id: voucherId,
-        shopId: "shop-local-1",
+        shopId: SHOP_ID,
         type: kind,
         partyId: v.partyId,
         businessDate: v.businessDate,
@@ -226,26 +242,48 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
                     ))}
                   </div>
                 </Field>
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="Gold" unit={en.units.g}><Input {...register("goldG")} inputMode="decimal" placeholder="0.000" /></Field>
-                  <Field label="Silver" unit={en.units.g}><Input {...register("silverG")} inputMode="decimal" placeholder="0.000" /></Field>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-3">
+                  <div className="mb-2"><MetalTag metal="GOLD" /></div>
+                  <div className="flex flex-col gap-3">
+                    <Field label="Weight" unit={en.units.g}>
+                      <AmountInput prefix="g" {...register("goldG")} inputMode="decimal" placeholder="0.000" />
+                    </Field>
+                    <Field label="Tunch" unit={en.units.percent}>
+                      <div className="flex flex-wrap gap-1.5">
+                        {TUNCH_SHORTCUTS.map((t) => (
+                          <Chip key={t} selected={goldTunch === t} onClick={() => setValue("goldTunch", t)}>{t}</Chip>
+                        ))}
+                      </div>
+                      <Input {...register("goldTunch")} inputMode="decimal" placeholder="Or type exact %" className="mt-2" />
+                    </Field>
+                    {metalPreview("GOLD", goldG, goldTunch) ? (
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
+                        {metalPreview("GOLD", goldG, goldTunch)}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-              <Field label="Gold tunch" unit={en.units.percent}>
-                <div className="flex flex-wrap gap-1.5">
-                  {TUNCH_SHORTCUTS.map((t) => (
-                    <Chip key={t} selected={goldTunch === t} onClick={() => setValue("goldTunch", t)}>{t}</Chip>
-                  ))}
+                <div className="rounded-2xl border border-slate-300 bg-slate-50/60 p-3">
+                  <div className="mb-2"><MetalTag metal="SILVER" /></div>
+                  <div className="flex flex-col gap-3">
+                    <Field label="Weight" unit={en.units.g}>
+                      <AmountInput prefix="g" {...register("silverG")} inputMode="decimal" placeholder="0.000" />
+                    </Field>
+                    <Field label="Tunch" unit={en.units.percent}>
+                      <div className="flex flex-wrap gap-1.5">
+                        {TUNCH_SHORTCUTS.map((t) => (
+                          <Chip key={t} selected={silverTunch === t} onClick={() => setValue("silverTunch", t)}>{t}</Chip>
+                        ))}
+                      </div>
+                      <Input {...register("silverTunch")} inputMode="decimal" placeholder="Or type exact %" className="mt-2" />
+                    </Field>
+                    {metalPreview("SILVER", silverG, silverTunch) ? (
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
+                        {metalPreview("SILVER", silverG, silverTunch)}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-                <Input {...register("goldTunch")} inputMode="decimal" placeholder="Or type exact %" className="mt-2" />
-              </Field>
-              <Field label="Silver tunch" unit={en.units.percent}>
-                <div className="flex flex-wrap gap-1.5">
-                  {TUNCH_SHORTCUTS.map((t) => (
-                    <Chip key={t} selected={silverTunch === t} onClick={() => setValue("silverTunch", t)}>{t}</Chip>
-                  ))}
-                </div>
-                <Input {...register("silverTunch")} inputMode="decimal" placeholder="Or type exact %" className="mt-2" />
-              </Field>
             </div>
           </Card>
           <details className="rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">

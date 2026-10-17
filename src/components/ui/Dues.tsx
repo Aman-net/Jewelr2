@@ -44,34 +44,67 @@ export function DuesHead({ cashPaise, goldFineMg, silverFineMg, size = "lg" }: {
   );
 }
 
-/** Compact dues for rows: coloured cash amount + metal pills. */
+/** Compact dues for rows, symbol convention like the rest of the app:
+ * "+₹500 · +G 80 g · −S 20 g" (+ = you get, − = you give). Metal dues lead. */
 export function DuesLine({ cashPaise, goldFineMg, silverFineMg }: {
   cashPaise: number;
   goldFineMg: number;
   silverFineMg: number;
 }) {
+  const signed = (v: number, text: string) => (v === 0 ? text : `${v > 0 ? "+" : "−"}${text}`);
+  const metalFirst = goldFineMg !== 0 || silverFineMg !== 0;
+  if (!metalFirst) {
+    return (
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <div className={cn(
+          "text-sm font-bold tabular-nums",
+          cashPaise === 0 ? "text-stone-400" : cashPaise > 0 ? "text-emerald-700" : "text-red-700",
+        )}>
+          {signed(cashPaise, formatINR(Math.abs(cashPaise)))}
+        </div>
+      </div>
+    );
+  }
   return (
-    <div className="flex shrink-0 flex-col items-end gap-1">
-      <div className={cn(
-        "text-sm font-bold",
+    <div className="flex shrink-0 flex-col items-end gap-0.5">
+      <div className="flex items-center gap-2 text-sm font-bold tabular-nums">
+        {goldFineMg !== 0 && (
+          <span className={goldFineMg > 0 ? "text-emerald-700" : "text-red-700"}>
+            {signed(goldFineMg, `G ${formatGram(Math.abs(goldFineMg))}`)}
+          </span>
+        )}
+        {silverFineMg !== 0 && (
+          <span className={silverFineMg > 0 ? "text-emerald-700" : "text-red-700"}>
+            {signed(silverFineMg, `S ${formatGram(Math.abs(silverFineMg))}`)}
+          </span>
+        )}
+      </div>
+      <span className={cn(
+        "text-xs font-medium tabular-nums",
         cashPaise === 0 ? "text-stone-400" : cashPaise > 0 ? "text-emerald-700" : "text-red-700",
       )}>
-        {formatINR(cashPaise)}
-      </div>
-      {(goldFineMg !== 0 || silverFineMg !== 0) && (
-        <div className="flex gap-1">
-          {goldFineMg !== 0 && (
-            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-900">
-              {goldFineMg > 0 ? "+" : "−"}{formatGram(Math.abs(goldFineMg))}
-            </span>
-          )}
-          {silverFineMg !== 0 && (
-            <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[11px] font-bold text-slate-700">
-              {silverFineMg > 0 ? "+" : "−"}{formatGram(Math.abs(silverFineMg))}
-            </span>
-          )}
-        </div>
-      )}
+        {signed(cashPaise, formatINR(Math.abs(cashPaise)))}
+      </span>
     </div>
+  );
+}
+
+/** Signed cash delta for entry rows: + (emerald) / − (red). Null when zero. */
+export function CashDelta({ paise }: { paise: number }) {
+  if (paise === 0) return null;
+  return (
+    <span className={cn("font-semibold tabular-nums", paise > 0 ? "text-emerald-700" : "text-red-700")}>
+      {paise > 0 ? "+" : "−"}{formatINR(Math.abs(paise))}
+    </span>
+  );
+}
+
+/** Signed metal delta with unit letter: +G 80 g / −S 20 g. Null when zero. */
+export function MetalDelta({ mg, metal }: { mg: number; metal: "GOLD" | "SILVER" }) {
+  if (mg === 0) return null;
+  return (
+    <span className={cn("font-semibold tabular-nums", metal === "GOLD" ? "text-amber-700" : "text-slate-600")}>
+      {mg > 0 ? "+" : "−"}{metal === "GOLD" ? "G" : "S"} {formatGram(Math.abs(mg))}
+    </span>
   );
 }

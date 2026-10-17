@@ -1,5 +1,6 @@
 import { db } from "./db.ts";
 import type { JewelrDb } from "./db.ts";
+import { clearItemCfg, moveItemCfg } from "./stock.ts";
 
 /**
  * Item (category) master. Presets ship with the app; anything the operator
@@ -114,10 +115,10 @@ export async function renameCustom(
     throw new Error(`“${clean}” is already a standard item`);
   }
   // Move the usage record so recency survives the rename.
-  const oldKey = keyFor(metal, oldName);
-  const oldUse = parseUse((await dbx.app_settings.get(oldKey))?.value);
+  const oldKey = keyFor(metal, oldName);  const oldUse = parseUse((await dbx.app_settings.get(oldKey))?.value);
   await dbx.transaction("rw", [dbx.app_settings], async () => {
     await putCustoms(metal, next, dbx);
+    await moveItemCfg(metal, oldName, clean, dbx);
     if (oldUse) {
       const targetKey = keyFor(metal, clean);
       const targetUse = parseUse((await dbx.app_settings.get(targetKey))?.value);
@@ -146,6 +147,7 @@ export async function deleteCustom(
   if (next.length === current.length) throw new Error(`Item not found: ${name}`);
   await dbx.transaction("rw", [dbx.app_settings], async () => {
     await putCustoms(metal, next, dbx);
+    await clearItemCfg(metal, name, dbx);
     await dbx.app_settings.delete(keyFor(metal, name));
   });
   return next;

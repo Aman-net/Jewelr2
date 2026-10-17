@@ -7,6 +7,7 @@ import { AmountInput, Field, Input, Textarea } from "../../components/ui/Field.t
 import { FlowHeader, StickyCta } from "../../components/ui/Flow.tsx";
 import { useLeaveGuard } from "../../hooks/useLeaveGuard.tsx";
 import { SuccessView } from "../../components/ui/Success.tsx";
+import { SHOP_ID } from "../../data/db.ts";
 import { postVoucher } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import type { BalanceDelta, Voucher } from "../../domain/index.ts";
@@ -80,7 +81,7 @@ export function OpeningForm() {
       }
       setPreview(buildVoucher({
         id: voucherId,
-        shopId: "shop-local-1",
+        shopId: SHOP_ID,
         type: "OPENING",
         partyId: v.partyId,
         businessDate: v.businessDate,

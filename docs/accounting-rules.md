@@ -35,19 +35,70 @@ labour ₹  = round(physicalMg * labourPaisePerGram / 1000)
 | Q2 | Billing tunch | Party owes fine on **agreed** tunch; recorded is info only; receipts credit physical × tested tunch | `domain/rules/tunch.ts` |
 | Q3 | Mixed settlement | Each component hits its own column; order is UX only | `domain/rules/settlement.ts` |
 | Q4 | Opening unit | Opening metal is **fine** weight | `domain/rules/opening.ts` |
-| Q5 | Labour basis | On **physical** weight, cash only, sales only (purchases: 0) | `domain/rules/labour.ts` |
+| Q5 | Labour basis | **Owner-confirmed 2026-10-15:** cash-only, on SALE and PURCHASE, `PER_PIECE` (count required) or `PER_KG` (÷1000 internally) | `domain/rules/labour.ts` |
 | Q6 | Rounding | Half up, **line level**, to paise/mg, then sum | `domain/rules/rounding.ts` |
 | Q8 | Reversal dating | Reversal uses the **original** businessDate (rewrites as-of history) | `domain/rules/reversal.ts` |
+
+## Owner-confirmed additions (2026-10-15, confirmed in chat with worked examples)
+
+- **Misc charges:** voucher-level labelled cash extras on SALE/PURCHASE only;
+  sign follows voucher direction (sale +, purchase −). Signed amounts are
+  allowed: a negative value is a discount/rebate (kamayi) — it reduces the
+  cash due on sale and the shop's cash debt on purchase. Zero amounts are
+  rejected (a labelled ₹0 row is always operator error).
+- **Conversion sides:** every conversion carries `side` (`PARTY_OWES` shrinks
+  party dues, `SHOP_OWES` shrinks shop dues) alongside direction. The four
+  confirmed cases (Ex.1–Ex.4 in chat 2026-10-15): metal→cash and cash→metal
+  on both sides, each shrinking the picked side and growing the other by the
+  rate equivalent. Over-conversion posts with a form-level warning, never a
+  block.
+- **Weight precision (owner-confirmed 2026-10-16):** silver is whole grams
+  everywhere (half up: 2.3 g → 2 g, 4.5 g → 5 g); gold keeps milligrams
+  (half up past 3 decimals). Applied at snapshot time to physical, fine,
+  settlement, conversion (cash re-derives from the rounded fine), opening,
+  adjustments, and stock — so previews, history, and the PDF all agree.
+- **One live opening per party** (data-layer rule, reversal-aware correction).
 
 Q7 (returns) and Q9 (payment modes) need no calculation rule in v0.1:
 returns = reversal + replacement/`ADJUSTMENT`; payment mode is a tag only.
 
-## Data-layer integrity rule (no brief rule, enforced in code)
+## Item defaults (master only, added 2026-10-17)
 
-One **live** opening balance per party (`assertSingleOpening` in
-`data/vouchers.ts`). It may be posted at creation or later with a backdated
-as-of date, but a second opening is rejected — corrections go through
-reversal + replacement. Reversed openings don't count.
+- **Item config** (`data/stock.ts` `setItemCfg`) holds prefill-only defaults:
+  default tunch, low-stock weight/pieces, and **selling labour** (mode + rate).
+  These never touch posted history — every posted line snapshots its own tunch
+  and labour at post time.
+- **Selling labour is a prefill, not a calculation.** Picking an item on a SALE
+  line copies the saved mode + rate into the line (the operator can still change
+  it); the posted line stores those values as its own snapshot. Mode and rate
+  travel as a pair — a lone basis or a lone rate is rejected, and a rate must be
+  more than zero.
+- **Stock shows the labour a movement carried**: `getStockMoves` joins each
+  trade movement back to its voucher line, so an item page can show what labour
+  an item was bought or sold at.
+
+## Data-layer integrity rules (owner-confirmed, enforced in code)
+
+- One **live** opening balance per party (`assertSingleOpening` in
+  `data/vouchers.ts`). It may be posted at creation or later with a backdated
+  as-of date, but a second opening is rejected — corrections go through
+  reversal + replacement. Reversed openings don't count.
+- **Role direction** (owner-confirmed 2026-10-15): SALE needs `isCustomer`,
+  PURCHASE needs `isSupplier` (`assertRoleDirection`). Unknown parties are
+  rejected. Money flows and openings stay open to all roles.
+
+## No-silent-zero guards (added 2026-10-16, review approved)
+
+- **Tunch must be > 0** wherever it bills: sale/purchase line
+  `agreedTunchScaled > 0`; received metal (settlement) requires a tunch > 0
+  whenever the weight is present. A 0% or missing tunch would otherwise
+  silently zero the fine owed/credited.
+- **Silver must be ≥ 1 g** on trade lines and settlements (whole-gram rule):
+  a 0.6 g entry would round UP to 1 g silently, so sub-gram silver input is
+  rejected outright.
+- **ADJUSTMENT requires a reason** in `notes` (same discipline stock
+  adjustments already had). It is a manual balance delta; the khata must
+  explain itself.
 
 ## Agent assumption (no brief rule)
 
