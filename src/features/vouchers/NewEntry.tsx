@@ -30,7 +30,7 @@ const groups = [
 /** What happened? Grouped action tiles in operator language. */
 export function NewEntryPicker() {
   return (
-    <Page title="New entry">
+    <Page title="New entry" backTo="/" backLabel="Home">
       <p className="-mt-2 text-sm text-stone-500">What just happened? Pick one — the rest follows.</p>
       {groups.map((g) => (
         <div key={g.title}>

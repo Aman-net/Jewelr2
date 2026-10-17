@@ -1,18 +1,32 @@
+import { ChevronLeft } from "lucide-react";
 import { useNavigate } from "react-router";
+import { cn } from "../../lib/cn.ts";
 
 /**
  * App-like back: always the screen's declared parent, never history.
  * Predictable like an app — the parent map in lib/nav.ts is the contract.
+ *
+ * Rendered as a tappable pill (full 44px target, hover/active wash) rather than
+ * bare text, so it reads as a control on a phone. Callers on dark surfaces pass
+ * their own colours — cn() is tailwind-merge, so they win.
  */
-export function BackButton({ fallback, label = "Back" }: { fallback: string; label?: string }) {
+export function BackButton({ fallback, label = "Back", className }: {
+  fallback: string;
+  label?: string;
+  className?: string;
+}) {
   const navigate = useNavigate();
   return (
     <button
       type="button"
-      className="text-sm font-semibold text-amber-800 active:opacity-70"
       onClick={() => navigate(fallback, { replace: true })}
+      className={cn(
+        "inline-flex min-h-11 items-center gap-0.5 rounded-full py-1 pl-1 pr-3 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100/70 active:bg-amber-100",
+        className,
+      )}
     >
-      ‹ {label}
+      <ChevronLeft size={20} strokeWidth={2.5} aria-hidden />
+      {label}
     </button>
   );
 }

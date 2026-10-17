@@ -61,7 +61,7 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
   const [posting, setPosting] = useState(false);
   const partyList = usePartyList();
 
-  const { register, handleSubmit, setValue, watch } = useForm<Form>({
+  const { register, handleSubmit, setValue, watch, formState: { isDirty } } = useForm<Form>({
     defaultValues: {
       partyId: state.prefill?.partyId ?? params.get("party") ?? "",
       businessDate: state.prefill?.businessDate ?? todayLocal(),
@@ -85,7 +85,8 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
   const tone: FlowTone = kind === "RECEIPT" ? "emerald" : "orange";
   const shell = "mx-auto w-full max-w-xl px-4 pb-6 pt-4";
   const backTo = state.prefill?.partyId ?? params.get("party") ? `/parties/${state.prefill?.partyId ?? params.get("party")}` : "/vouchers/new";
-  const { prompt } = useLeaveGuard(step >= 1 && !posted);
+  /** Back walks the flow's own ladder (see SalePurchaseForm) instead of leaving it. */
+  const { prompt } = useLeaveGuard((step > 0 || isDirty) && !posted, step > 0 ? () => setStep(step - 1) : undefined);
 
   const nextFromParty = () => {
     setError("");
@@ -203,6 +204,7 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
           tone={tone}
           title={title}
           backTo={backTo}
+          backLabel={step > 0 ? "Party" : undefined}
           context={step === 1 ? (kind === "RECEIPT" ? `Received from ${partyName || "…"}` : `Paid to ${partyName || "…"}`) : undefined}
           onChangeContext={step === 1 ? () => setStep(0) : undefined}
           current={step}

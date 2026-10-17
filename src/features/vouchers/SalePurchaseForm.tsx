@@ -116,7 +116,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
   const [posting, setPosting] = useState(false);
   const [lastRates, setLastRates] = useState<Record<string, { amountPaise: number }>>({});
 
-  const { register, control, handleSubmit, setValue, watch, getValues, trigger } = useForm<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>({
+  const { register, control, handleSubmit, setValue, watch, getValues, trigger, formState: { isDirty } } = useForm<HeaderForm & { lines: LineForm[]; misc: MiscForm[] }>({
     defaultValues: {
       partyId: prefill?.partyId ?? params.get("party") ?? "",
       businessDate: prefill?.businessDate ?? todayLocal(),
@@ -132,7 +132,12 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
   const partyList = usePartyList();
   const partyName = (partyList ?? []).find((p) => p.id === partyId)?.name ?? "";
   const backTo = prefill?.partyId ?? params.get("party") ? `/parties/${prefill?.partyId ?? params.get("party")}` : "/vouchers/new";
-  const { prompt } = useLeaveGuard(step >= 1 && !posted);
+  /**
+   * Back walks the wizard, not the app: on the details or review step a press
+   * steps up one step (no "leave?" sheet, nothing typed is thrown away); on the
+   * party step it leaves, and only asks when there is something to lose.
+   */
+  const { prompt } = useLeaveGuard((step > 0 || isDirty) && !posted, step > 0 ? () => setStep(step - 1) : undefined);
   const stockRows = useStockLive();
   const stockMap = useMemo(
     () => new Map((stockRows ?? []).map((b) => [`${b.metal}|${b.name.trim().toLowerCase()}`, b] as const)),
@@ -348,6 +353,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
           tone={tone}
           title={title}
           backTo={backTo}
+          backLabel={step > 0 ? "Party" : undefined}
           context={step === 1 ? (kind === "SALE" ? `Giving goods to ${partyName || "…"}` : `Taking goods from ${partyName || "…"}`) : undefined}
           onChangeContext={step === 1 ? () => setStep(0) : undefined}
           current={step}

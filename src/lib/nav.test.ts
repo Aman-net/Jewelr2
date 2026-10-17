@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { needsPartyLookup, parentFor } from "./nav.ts";
+import { isVoucherDetail, needsPartyLookup, parentFor } from "./nav.ts";
 
 describe("deterministic parents", () => {
   it("maps every screen to exactly one parent", () => {
     expect(parentFor("/")).toBeNull();
     expect(parentFor("/parties")).toBe("/");
     expect(parentFor("/parties/new")).toBe("/parties");
-    expect(parentFor("/parties/abc")).toBe("/");
+    expect(parentFor("/parties/abc")).toBe("/parties");
     expect(parentFor("/parties/abc/edit")).toBe("/parties/abc");
     expect(parentFor("/parties/abc/bill")).toBe("/parties/abc");
     expect(parentFor("/vouchers/new")).toBe("/");
@@ -23,8 +23,11 @@ describe("deterministic parents", () => {
     expect(parentFor("/nope")).toBe("/");
   });
 
-  it("flags voucher detail for party lookup", () => {
+  it("treats /vouchers/:id as a detail but never /vouchers/new", () => {
+    expect(isVoucherDetail("/vouchers/abc")).toBe(true);
+    expect(isVoucherDetail("/vouchers/new")).toBe(false);
+    expect(isVoucherDetail("/vouchers/new/sale")).toBe(false);
     expect(needsPartyLookup("/vouchers/abc")).toBe(true);
-    expect(needsPartyLookup("/vouchers/new/sale")).toBe(false);
+    expect(needsPartyLookup("/vouchers/new")).toBe(false);
   });
 });

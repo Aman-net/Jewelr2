@@ -1,7 +1,7 @@
 import { Suspense, lazy } from "react";
 import type { ReactNode } from "react";
 import { Navigate, RouterProvider, createHashRouter, useLocation, useNavigate, useParams } from "react-router";
-import { Shell } from "../components/layout/Shell.tsx";
+import { Shell, SystemBack } from "../components/layout/Shell.tsx";
 import { AppErrorBoundary } from "../components/ui/ErrorBoundary.tsx";
 import { HomePage } from "../features/home/Home.tsx";
 import { KhataPage } from "../features/parties/Khata.tsx";
@@ -90,9 +90,12 @@ function PartyNewWrapper() {
 function BoundShell() {
   const location = useLocation();
   return (
-    <AppErrorBoundary key={location.pathname}>
-      <Shell />
-    </AppErrorBoundary>
+    <>
+      <SystemBack />
+      <AppErrorBoundary key={location.pathname}>
+        <Shell />
+      </AppErrorBoundary>
+    </>
   );
 }
 

@@ -33,7 +33,7 @@ export function toneForVoucher(type: string): FlowTone {
  * Coloured flow header: big verb, party context, wizard progress.
  * Each entry flow owns a colour so the operator always knows where they are.
  */
-export function FlowHeader({ tone, title, context, onChangeContext, current, labels, backTo }: {
+export function FlowHeader({ tone, title, context, onChangeContext, current, labels, backTo, backLabel }: {
   tone: FlowTone;
   title: string;
   context?: string;
@@ -41,12 +41,18 @@ export function FlowHeader({ tone, title, context, onChangeContext, current, lab
   current: number;
   labels: [string, string, string];
   backTo?: string;
+  /** Names where back goes — "Party" while on the details step of a wizard. */
+  backLabel?: string;
 }) {
   return (
     <div className={cn("rounded-3xl bg-gradient-to-br p-5 text-white shadow-md", TONES[tone])}>
       {backTo ? (
-        <div className="mb-1 [&_button]:text-white">
-          <BackButton fallback={backTo} />
+        <div className="mb-1">
+          <BackButton
+            fallback={backTo}
+            label={backLabel}
+            className="text-white hover:bg-white/15 active:bg-white/25"
+          />
         </div>
       ) : null}
       <div className="text-2xl font-bold tracking-tight">{title}</div>

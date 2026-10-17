@@ -57,11 +57,20 @@ retyping them on every bill. Rename/delete touch the master only; posted
 history keeps its original strings.
 
 Navigation is app-like, not site-like: the bottom nav shows only on hub
-screens (Home, Parties, khata, Summary, Settings); focused flows
-(entry wizards, voucher detail, edit, item master) go full-screen with an
-explicit back button that falls back safely on deep links. Dirty money forms
-are guarded by `useLeaveGuard` — system back or stray taps surface a
-Leave/Stay sheet instead of silently discarding the entry.
+screens (Home, Parties, khata, New-entry picker, Summary, Settings); focused
+flows (entry wizards, voucher detail, edit, item master) go full-screen with an
+explicit back button. Every screen declares exactly one parent in
+`src/lib/nav.ts`, and that map governs **both** the in-app back button and the
+phone/browser back gesture, so the two can never disagree. Home is the root: a
+press there stays put, and once the history runs out the platform leaves the app.
+A screen sitting at history position 0 gets a floor entry pushed under it, so a
+cold start on a deep link backs into its parent instead of out of the app.
+
+Entry wizards own a small ladder of their own: back walks Party → details →
+review before it leaves the flow, so a stray press never throws away a filled
+bill. Only the party step — where there is something to lose — asks at all:
+dirty money forms are guarded by `useLeaveGuard`, which surfaces a Leave/Stay
+sheet instead of silently discarding the entry.
 
 Storage is Postgres-shaped: one flat table per entity, voucher lines in
 `voucher_lines`, settlement/conversion/manual-delta parts in their own tables

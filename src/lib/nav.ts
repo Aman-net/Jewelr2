@@ -16,7 +16,9 @@ export function parentFor(pathname: string, search = ""): string | null {
   const partyChild = pathname.match(/^\/parties\/([^/]+)\/(edit|bill|ledger)$/);
   if (partyChild) return `/parties/${partyChild[1]}`;
 
-  if (/^\/parties\/[^/]+$/.test(pathname)) return "/";
+  // A party's khata belongs to the parties list, not to whichever tab the
+  // operator happened to arrive from (owner, 2026-10-17).
+  if (/^\/parties\/[^/]+$/.test(pathname)) return "/parties";
 
   if (pathname === "/vouchers/new") return "/";
   if (/^\/vouchers\/new\/(sale|purchase|receipt|payment|conversion|opening)$/.test(pathname)) {
@@ -41,11 +43,18 @@ export function parentFor(pathname: string, search = ""): string | null {
   }
 
   // /vouchers/:id and anything unknown.
-  if (/^\/vouchers\/[^/]+$/.test(pathname)) return "/";
   return "/";
+}
+
+/**
+ * Voucher detail (`/vouchers/:id`) — but never the New-entry picker, whose
+ * second segment is the literal "new".
+ */
+export function isVoucherDetail(pathname: string): boolean {
+  return /^\/vouchers\/[^/]+$/.test(pathname) && pathname !== "/vouchers/new";
 }
 
 /** Voucher detail's parent is its party's khata — resolved from storage. */
 export function needsPartyLookup(pathname: string): boolean {
-  return /^\/vouchers\/[^/]+$/.test(pathname);
+  return isVoucherDetail(pathname);
 }
