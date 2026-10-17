@@ -19,7 +19,7 @@ function BackupBanner() {
     <Link
       to="/settings/backup"
       className={cn(
-        "block px-4 py-2 text-center text-sm font-medium",
+        "bar-in block px-4 py-2 text-center text-sm font-medium",
         strong ? "bg-red-100 text-red-900" : "bg-amber-100 text-amber-900",
       )}
     >
@@ -61,10 +61,10 @@ function UpdateBanner() {
   } = useRegisterSW();
   if (!needRefresh) return null;
   return (
-    <div className="flex items-center justify-between gap-2 bg-stone-900 px-4 py-2 text-sm text-white">
+    <div className="bar-in flex items-center justify-between gap-2 bg-stone-900 px-4 py-2 text-sm text-white">
       <span className="font-medium">A new version is ready — your data is safe.</span>
       <button
-        className="flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-bold text-stone-900"
+        className="flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-bold text-stone-900 transition-transform duration-150 active:scale-95"
         onClick={() => {
           setNeedRefresh(false);
           void updateServiceWorker(true);
@@ -169,14 +169,15 @@ export function Shell() {
         <Outlet />
       </main>
       {showNav && (
-        <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)]">
+        <nav className="nav-in fixed inset-x-0 bottom-0 z-10 border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)]">
           <div className="mx-auto grid max-w-xl grid-cols-5">
             {tabs.map(({ to, label, Icon, end }) =>
               to === "/vouchers/new" ? (
                 /** Center action: raised amber FAB riding the bar's top edge —
-                 * ring halo carves it out of content scrolling behind. */
+                 * ring halo carves it out of content scrolling behind. Gentle
+                 * roll on hover (desktop), spring-back on press. */
                 <NavLink key={to} to={to} aria-label={label} className="flex justify-center pt-2">
-                  <span className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-amber-800 text-white shadow-lg shadow-amber-900/30 ring-4 ring-white transition-transform active:scale-95">
+                  <span className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-amber-800 text-white shadow-lg shadow-amber-900/30 ring-4 ring-white transition-transform duration-200 hover:rotate-6 active:scale-95">
                     <Plus size={26} strokeWidth={2.5} />
                   </span>
                 </NavLink>
@@ -187,14 +188,18 @@ export function Shell() {
                   end={end}
                   className={({ isActive }) =>
                     cn(
-                      "flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium",
+                      "flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors duration-200",
                       isActive ? "text-amber-800" : "text-stone-500",
                     )
                   }
                 >
                   {({ isActive }) => (
                     <>
-                      <Icon size={22} fill={isActive ? "currentColor" : "none"} />
+                      <Icon
+                        size={22}
+                        fill={isActive ? "currentColor" : "none"}
+                        className={cn("transition-transform duration-200", isActive && "scale-105")}
+                      />
                       {label}
                     </>
                   )}

@@ -48,7 +48,7 @@ function LaneToggle({ value, onChange }: { value: LaneDir; onChange: (v: LaneDir
           type="button"
           onClick={() => onChange(v)}
           className={cn(
-            "rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors",
+            "rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors duration-150",
             value === v ? "bg-white text-stone-900 shadow-sm" : "text-stone-500",
           )}
         >
@@ -194,7 +194,7 @@ export function OpeningForm() {
     const d = voucherDeltas(preview);
     return (
       <div className="mx-auto w-full max-w-xl px-4 pb-6 pt-4">
-        <div className="flex flex-col gap-3">
+        <div className="flow-step flex flex-col gap-3">
           <FlowHeader tone="stone" title="Review entry" context={partyName} current={2} labels={["Party", "Balance", "Review"]} />
           <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
             partyName={partyName} posting={posting} error={error}
@@ -209,7 +209,7 @@ export function OpeningForm() {
     <div className="mx-auto w-full max-w-xl px-4 pb-6 pt-4">
       <div className="flex flex-col gap-3">
         <FlowHeader tone="stone" title="Opening balance" backTo={backTo} context={partyName || undefined} current={1} labels={["Party", "Balance", "Review"]} />
-        <form className="flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
+        <form className="flow-step flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
           <Card>
             <div className="flex flex-col gap-3">
               <p className="text-xs text-stone-500">
@@ -249,7 +249,7 @@ export function OpeningForm() {
               </details>
             </div>
           </Card>
-          {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
+          {error ? <p className="shake text-sm font-medium text-red-700" role="alert">{error}</p> : null}
           <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">{en.voucher.review} →</Button></StickyCta>
         </form>
         {prompt}

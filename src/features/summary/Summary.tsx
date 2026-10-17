@@ -92,7 +92,7 @@ export function SummaryPage() {
   );
 
   return (
-    <Page title={en.nav.summary}>
+    <Page title={en.nav.summary} contentClass="stagger">
       <MarketHero />
 
       {toReceive.length > 0 && (
@@ -100,7 +100,7 @@ export function SummaryPage() {
           <div className="mb-1 text-sm font-semibold text-emerald-800">Top to receive</div>
           <p className="mb-2 text-xs text-stone-500">Ranked metal first — grams owed before cash.</p>
           {toReceive.map(([partyId, b]) => (
-            <Link key={partyId} to={`/parties/${partyId}`} className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0">
+            <Link key={partyId} to={`/parties/${partyId}`} className="row-press flex items-center gap-3 rounded-lg border-b border-stone-100 py-2 last:border-0 active:bg-stone-50">
               <PartyAvatar name={nameOf(partyId)} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-stone-900">{nameOf(partyId)}</div>
@@ -117,7 +117,7 @@ export function SummaryPage() {
         <Card>
           <div className="mb-1 text-sm font-semibold text-red-800">Top to pay</div>
           {toPay.map(([partyId, b]) => (
-            <Link key={partyId} to={`/parties/${partyId}`} className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0">
+            <Link key={partyId} to={`/parties/${partyId}`} className="row-press flex items-center gap-3 rounded-lg border-b border-stone-100 py-2 last:border-0 active:bg-stone-50">
               <PartyAvatar name={nameOf(partyId)} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-stone-900">{nameOf(partyId)}</div>
@@ -147,7 +147,7 @@ export function SummaryPage() {
         )}
 
         {/* Period total: count left, signed move right — same delta language as rows below. */}
-        <div className="mt-2 mb-2 flex items-center justify-between rounded-xl bg-stone-50 px-3 py-2">
+        <div className="anim-fade mt-2 mb-2 flex items-center justify-between rounded-xl bg-stone-50 px-3 py-2">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
             {period.count === 0 ? "No entries in this period" : `${period.count} ${period.count === 1 ? "entry" : "entries"}`}
           </span>
@@ -173,7 +173,7 @@ export function SummaryPage() {
           ))}
         </div>
 
-        {(feed ?? []).length === 0 && <p className="text-sm text-stone-500">Nothing here for this filter.</p>}
+        {(feed ?? []).length === 0 && <p className="anim-fade text-sm text-stone-500">Nothing here for this filter.</p>}
 
         {/* Day-grouped feed — when over row labels, one header per day. */}
         {(feed ?? []).length > 0 && (
@@ -190,7 +190,7 @@ export function SummaryPage() {
                   <span className="h-px flex-1 bg-stone-100" />
                 </div>
                 {g.items.map((a) => (
-                  <Link key={a.voucherId} to={`/vouchers/${a.voucherId}`} className="flex items-center gap-2.5 border-b border-stone-100 py-2 last:border-0">
+                  <Link key={a.voucherId} to={`/vouchers/${a.voucherId}`} className="row-press flex items-center gap-2.5 rounded-lg border-b border-stone-100 py-2 last:border-0 active:bg-stone-50">
                     <PartyAvatar name={nameOf(a.partyId)} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-1.5">

@@ -60,7 +60,7 @@ export function FlowHeader({ tone, title, context, onChangeContext, current, lab
         <div className="mt-1 flex items-center gap-2 text-sm text-white/85">
           <span className="min-w-0 flex-1 truncate">{context || "No party chosen"}</span>
           {onChangeContext && context ? (
-            <button type="button" className="shrink-0 rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold" onClick={onChangeContext}>
+            <button type="button" className="shrink-0 rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold transition-colors duration-150 hover:bg-white/30 active:bg-white/40" onClick={onChangeContext}>
               change
             </button>
           ) : null}
@@ -69,7 +69,14 @@ export function FlowHeader({ tone, title, context, onChangeContext, current, lab
       <div className="mt-3 flex gap-1.5">
         {labels.map((label, i) => (
           <div key={label} className="flex-1">
-            <div className={cn("h-1.5 rounded-full", i <= current ? "bg-white" : "bg-white/30")} />
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/30">
+              <div
+                className={cn(
+                  "h-full origin-left rounded-full bg-white transition-transform duration-300 ease-[var(--ease-out)]",
+                  i <= current ? "scale-x-100" : "scale-x-0",
+                )}
+              />
+            </div>
             <div className={cn("mt-1 text-[11px] font-medium", i === current ? "text-white" : "text-white/60")}>{label}</div>
           </div>
         ))}
@@ -78,11 +85,16 @@ export function FlowHeader({ tone, title, context, onChangeContext, current, lab
   );
 }
 
-/** Thumb-zone CTA pinned above the bottom edge while scrolling. */
+/**
+ * Thumb-zone CTA pinned above the bottom edge while scrolling. A stone scrim
+ * fades content out beneath it so the button reads on any background; the
+ * whole strip settles in with the step it belongs to.
+ */
 export function StickyCta({ children }: { children: ReactNode }) {
   return (
     <div className="sticky bottom-[calc(1rem+env(safe-area-inset-bottom))] z-10 pt-2">
-      {children}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 -top-8 bottom-[calc(-1rem-env(safe-area-inset-bottom))] bg-gradient-to-t from-stone-100 via-stone-100/90 to-transparent" />
+      <div className="anim-rise relative">{children}</div>
     </div>
   );
 }

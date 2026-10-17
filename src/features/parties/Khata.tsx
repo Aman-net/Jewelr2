@@ -5,7 +5,7 @@ import { ArrowDownToLine, ArrowUpFromLine, History, Percent, ReceiptText, Scale,
 import type { LucideIcon } from "lucide-react";
 import { Button } from "../../components/ui/Button.tsx";
 import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
-import { LoadingRow } from "../../components/ui/Loader.tsx";
+import { ListSkeleton, PageSkeleton } from "../../components/ui/Loader.tsx";
 import { Sheet } from "../../components/ui/Bits.tsx";
 import { TypeTag, RoleTags } from "../../components/ui/TypeTag.tsx";
 import { Field, Input, Select } from "../../components/ui/Field.tsx";
@@ -117,7 +117,7 @@ export function KhataPage() {
     return take.length > 0 ? [{ ...g, rows: take }] : [];
   });
 
-  if (party === undefined) return <Page title=""><LoadingRow label="Loading khata…" /></Page>;
+  if (party === undefined) return <PageSkeleton label="Loading khata…" />;
   if (!party) return <Page title="Khata"><Card><p className="text-sm text-stone-500">Party not found.</p></Card></Page>;
 
   const cash = balances?.cashPaise ?? 0;
@@ -129,9 +129,10 @@ export function KhataPage() {
     <Page
       title={party.name}
       action={<Link to={`/parties/${party.id}/edit`} className="text-sm font-medium text-amber-800">Edit</Link>}
+      contentClass="stagger"
     >
       {duplicateName ? (
-        <div className="rounded-xl bg-amber-100 px-3 py-2 text-sm font-medium text-amber-900">{en.party.duplicateWarn}</div>
+        <div className="anim-rise rounded-xl bg-amber-100 px-3 py-2 text-sm font-medium text-amber-900">{en.party.duplicateWarn}</div>
       ) : null}
 
       <div className="rounded-3xl bg-stone-900 p-5 text-white shadow-md">
@@ -153,12 +154,12 @@ export function KhataPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="stagger grid grid-cols-3 gap-2">
         {entryActions.map((a) => {
           const allowed = actionAllowed(party, a.needs);
           const tile = (
             <div className={cn(
-              "flex flex-col items-center gap-1 rounded-2xl border border-stone-200 bg-white px-2 py-3 shadow-sm",
+              "press flex flex-col items-center gap-1 rounded-2xl border border-stone-200 bg-white px-2 py-3 shadow-sm",
               allowed ? "active:bg-amber-50" : "opacity-45",
             )}>
               <span className={cn("flex h-9 w-9 items-center justify-center rounded-full", a.tint)}>
@@ -171,7 +172,7 @@ export function KhataPage() {
             </div>
           );
           return allowed ? (
-            <Link key={a.to} to={a.href === "BILL" ? `/parties/${party.id}/bill` : `/vouchers/new/${a.to}?party=${party.id}`}>{tile}</Link>
+            <Link key={a.to} to={a.href === "BILL" ? `/parties/${party.id}/bill` : `/vouchers/new/${a.to}?party=${party.id}`} className="tappable block">{tile}</Link>
           ) : (
             <div key={a.to} aria-disabled="true">{tile}</div>
           );
@@ -179,7 +180,7 @@ export function KhataPage() {
       </div>
 
       {needsOpening ? (
-        <Link to={`/vouchers/new/opening?party=${party.id}`} className="self-center text-xs font-medium text-stone-500">
+        <Link to={`/vouchers/new/opening?party=${party.id}`} className="row-press self-center rounded px-1 text-xs font-medium text-stone-500 active:bg-stone-200">
           No opening balance yet — set it
         </Link>
       ) : null}
@@ -187,18 +188,18 @@ export function KhataPage() {
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold text-stone-700">Entries</span>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="stagger grid grid-cols-3 gap-2">
         <button
           type="button"
           onClick={() => setAsOfOpen(true)}
-          className="flex items-center justify-center gap-1.5 rounded-2xl border border-stone-200 bg-white py-2.5 text-sm font-semibold text-stone-800 shadow-sm active:bg-amber-50"
+          className="press flex items-center justify-center gap-1.5 rounded-2xl border border-stone-200 bg-white py-2.5 text-sm font-semibold text-stone-800 shadow-sm active:bg-amber-50"
         >
           <History size={16} /> Past balance
         </button>
         <button
           type="button"
           onClick={() => setFilterOpen(true)}
-          className="relative flex items-center justify-center gap-1.5 rounded-2xl border border-stone-200 bg-white py-2.5 text-sm font-semibold text-stone-800 shadow-sm active:bg-amber-50"
+          className="press relative flex items-center justify-center gap-1.5 rounded-2xl border border-stone-200 bg-white py-2.5 text-sm font-semibold text-stone-800 shadow-sm active:bg-amber-50"
         >
           <SlidersHorizontal size={16} /> Filter
           {(from || to || type !== "All") ? <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-amber-600" /> : null}
@@ -206,13 +207,13 @@ export function KhataPage() {
         <button
           type="button"
           onClick={() => setBillsOpen(true)}
-          className="flex items-center justify-center gap-1.5 rounded-2xl border border-stone-200 bg-white py-2.5 text-sm font-semibold text-stone-800 shadow-sm active:bg-amber-50"
+          className="press flex items-center justify-center gap-1.5 rounded-2xl border border-stone-200 bg-white py-2.5 text-sm font-semibold text-stone-800 shadow-sm active:bg-amber-50"
         >
           <ReceiptText size={16} /> Bills{(bills !== undefined && bills.length > 0) ? ` · ${bills.length}` : ""}
         </button>
       </div>
 
-      {entries === undefined && <LoadingRow />}
+      {entries === undefined && <ListSkeleton rows={3} label="Loading entries" />}
       {entries === undefined ? null : from ? (
         seed ? (
           <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-[11px] tabular-nums text-stone-600">
@@ -228,12 +229,12 @@ export function KhataPage() {
         <Card><p className="text-sm text-stone-500">No entries yet. Tap Sell or Got above to record the first one.</p></Card>
       )}
       {visibleGroups.length > 0 && (
-        <div className="flex flex-col gap-2">
+        <div className="stagger flex flex-col gap-2">
           {visibleGroups.flatMap((g) => g.rows).map(({ e, balCash, balGold, balSilver }) => {
             const type = shortType(e.description);
             const voucher = voucherMap?.get(e.voucherId);
             return (
-              <Link key={e.voucherId} to={`/vouchers/${e.voucherId}`}>
+              <Link key={e.voucherId} to={`/vouchers/${e.voucherId}`} className="tappable block">
                 <Card>
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex min-w-0 flex-1 items-center gap-1.5">

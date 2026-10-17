@@ -65,7 +65,7 @@ export function ShopDetailsCard() {
         <Button variant="secondary" disabled={busy} onClick={() => void save()}>
           Save shop details
         </Button>
-        {saved ? <span className="text-xs font-medium text-emerald-700">Saved</span> : null}
+        {saved ? <span className="anim-fade text-xs font-medium text-emerald-700">Saved</span> : null}
       </div>
     </Card>
   );

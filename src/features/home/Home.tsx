@@ -45,6 +45,7 @@ export function HomePage() {
       title="Jewelr"
       subtitle={new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })}
       action={<Link to="/vouchers/new"><Button>+ New</Button></Link>}
+      contentClass="stagger"
     >
       <MarketHero />
 
@@ -67,7 +68,7 @@ export function HomePage() {
       )}
 
       {partyRows.map(({ p, b }) => (
-        <Link key={p.id} to={`/parties/${p.id}`}>
+        <Link key={p.id} to={`/parties/${p.id}`} className="tappable block">
           <Card>
             <div className="flex items-center gap-3">
               <PartyAvatar name={p.name} />
@@ -86,7 +87,7 @@ export function HomePage() {
           <SectionLabel note={(recent ?? []).length}>Latest activity</SectionLabel>
           <Card>
             {(recent ?? []).map((a) => (
-              <Link key={a.voucherId} to={`/vouchers/${a.voucherId}`} className="flex items-center gap-2.5 border-b border-stone-100 py-2 last:border-0">
+              <Link key={a.voucherId} to={`/vouchers/${a.voucherId}`} className="row-press flex items-center gap-2.5 rounded-lg border-b border-stone-100 py-2 last:border-0 active:bg-stone-50">
                 <PartyAvatar name={(parties ?? []).find((p) => p.id === a.partyId)?.name ?? "…"} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">

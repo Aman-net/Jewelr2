@@ -33,12 +33,12 @@ export function MarketHero() {
 
   return (
     <div className="rounded-3xl bg-stone-900 p-5 text-white shadow-md">
-      <div className="mb-3 text-xs font-semibold uppercase tracking-widest text-stone-400">
+      <div key={duesView} className="anim-fade mb-3 text-xs font-semibold uppercase tracking-widest text-stone-400">
         {hero.cashPaise >= 0 ? "Market owes you" : "You owe market"}
       </div>
       <BalanceGrid cashPaise={hero.cashPaise} goldFineMg={hero.goldFineMg} silverFineMg={hero.silverFineMg} dark />
       {duesView !== "combined" && (
-        <div className="mt-2 text-[11px] text-stone-400">
+        <div className="anim-fade mt-2 text-[11px] text-stone-400">
           {duesView === "sale"
             ? "What customers owe you — sales minus received."
             : "What you owe suppliers — purchases minus paid."}
@@ -57,8 +57,8 @@ export function MarketHero() {
             type="button"
             onClick={() => setDuesView(v)}
             className={cn(
-              "flex-1 rounded-full px-2 py-1.5 text-xs font-bold",
-              duesView === v ? "bg-amber-400 text-stone-900" : "bg-white/10 text-stone-300",
+              "flex-1 rounded-full px-2 py-1.5 text-xs font-bold transition-[background-color,color,transform] duration-200 ease-[var(--ease-out)] active:scale-95",
+              duesView === v ? "bg-amber-400 text-stone-900" : "bg-white/10 text-stone-300 hover:bg-white/20",
             )}
           >
             {label}

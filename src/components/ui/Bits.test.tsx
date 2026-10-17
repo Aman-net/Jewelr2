@@ -40,7 +40,9 @@ describe("wizard bits", () => {
     await user.click(screen.getByText("SILVER"));
     expect(onChange).toHaveBeenCalledWith("SILVER");
     rerender(<Segmented options={["GOLD", "SILVER"] as const} value="SILVER" onChange={onChange} />);
-    expect(screen.getByText("SILVER").closest("button")?.className).toContain("bg-white");
+    // The sliding thumb carries the selected surface; labels flip colour.
+    expect(screen.getByText("SILVER").closest("button")?.className).toContain("text-stone-900");
+    expect(document.querySelector('[aria-hidden="true"]')?.className).toContain("transition-transform");
   });
 });
 

@@ -6,7 +6,7 @@ import { Pencil, Undo2 } from "lucide-react";
 import { Button } from "../../components/ui/Button.tsx";
 import { Sheet } from "../../components/ui/Bits.tsx";
 import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
-import { LoadingRow } from "../../components/ui/Loader.tsx";
+import { PageSkeleton } from "../../components/ui/Loader.tsx";
 import { Field, Textarea } from "../../components/ui/Field.tsx";
 import { toneForVoucher } from "../../components/ui/Flow.tsx";
 import { TypeTag, MetalTag } from "../../components/ui/TypeTag.tsx";
@@ -55,7 +55,7 @@ export function VoucherDetailPage() {
   const [error, setError] = useState("");
   const partyList = usePartyList();
 
-  if (stored === undefined) return <Page title=""><LoadingRow /></Page>;
+  if (stored === undefined) return <PageSkeleton label="Loading" />;
   if (!stored) return <Page title="Voucher"><Card><p className="text-sm text-stone-500">Voucher not found.</p></Card></Page>;
   const { voucher: v, entry: e } = stored;
   const partyName = (partyList ?? []).find((p) => p.id === v.partyId)?.name ?? "";
@@ -151,7 +151,7 @@ export function VoucherDetailPage() {
   };
 
   return (
-    <Page title="" backTo={`/parties/${v.partyId}`} backLabel="Khata">
+    <Page title="" backTo={`/parties/${v.partyId}`} backLabel="Khata" contentClass="stagger">
       <div className={cn("rounded-3xl bg-gradient-to-br p-5 text-white shadow-md", toneBg[tone])}>
         <div className="flex items-center gap-2">
           <TypeTag type={v.type} className="bg-white/25 text-white" />
@@ -326,7 +326,7 @@ export function VoucherDetailPage() {
             <Field label={en.voucher.reason}>
               <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="e.g. wrong tunch written" autoFocus />
             </Field>
-            {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
+            {error ? <p className="shake text-sm font-medium text-red-700" role="alert">{error}</p> : null}
             <Button variant="danger" full onClick={doReverse} disabled={busy} className="min-h-12">
               <Undo2 size={18} /> {en.voucher.reverse} only
             </Button>

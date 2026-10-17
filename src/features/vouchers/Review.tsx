@@ -43,7 +43,7 @@ export function Review({ voucher, cash, gold, silver, partyName, posting, error,
   const typeName = (en.voucher as Record<string, string>)[voucher.type.toLowerCase()] ?? voucher.type;
   return (
     <div className="flex flex-col gap-3">
-      <div className="overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-sm">
+      <div className="anim-fade overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-sm">
         <div className="flex items-center gap-2.5 p-4 pb-3">
           <span className={cn("h-3 w-3 shrink-0 rounded-full", DOT[voucher.type] ?? "bg-stone-400")} />
           <div className="min-w-0 flex-1">
@@ -118,10 +118,19 @@ export function Review({ voucher, cash, gold, silver, partyName, posting, error,
           </div>
         )}
       </div>
-      {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
+      {error ? <p className="shake text-sm font-medium text-red-700" role="alert">{error}</p> : null}
       <div className="flex gap-2">
         <div className="flex-1"><Button variant="secondary" full onClick={onBack} className="min-h-14 text-lg">{en.voucher.back}</Button></div>
-        <div className="flex-[2]"><Button full onClick={onConfirm} disabled={posting} className="min-h-14 text-lg shadow-lg">{posting ? "Posting…" : en.voucher.confirm}</Button></div>
+        <div className="flex-[2]">
+          <Button full onClick={onConfirm} disabled={posting} className="min-h-14 text-lg shadow-lg">
+            {posting ? (
+              <span className="inline-flex items-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
+                {en.voucher.posting}
+              </span>
+            ) : en.voucher.confirm}
+          </Button>
+        </div>
       </div>
     </div>
   );

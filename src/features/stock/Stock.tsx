@@ -7,7 +7,7 @@ import { Button } from "../../components/ui/Button.tsx";
 import { EmptyState } from "../../components/ui/Bits.tsx";
 import { Card, Page } from "../../components/ui/Card.tsx";
 import { AmountInput, Field, Input, SearchInput, Textarea } from "../../components/ui/Field.tsx";
-import { LoadingRow } from "../../components/ui/Loader.tsx";
+import { ListSkeleton, LoadingRow } from "../../components/ui/Loader.tsx";
 import { Segmented } from "../../components/ui/Segmented.tsx";
 import { MetalTag } from "../../components/ui/TypeTag.tsx";
 import {
@@ -36,7 +36,7 @@ export function StockHomeCard() {
     return { count: buckets.length, low };
   }, []);
   return (
-    <Link to="/stock">
+    <Link to="/stock" className="tappable block">
       <Card>
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800">
@@ -96,7 +96,7 @@ function BucketRow({ bucket }: { bucket: StockBucket }) {
   return (
     <Link
       to={itemLink(bucket.metal, bucket.name)}
-      className="flex items-center gap-3 border-b border-stone-100 py-2.5 last:border-0 active:bg-stone-50"
+      className="row-press -mx-1 flex items-center gap-3 rounded-lg border-b border-stone-100 px-1 py-2.5 last:border-0 active:bg-stone-50"
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -248,7 +248,7 @@ export function ItemCfgForm({ metal, name }: { metal: MetalType; name: string })
       {error ? <p className="mt-1 text-xs font-medium text-red-700">{error}</p> : null}
       <div className="mt-2 flex items-center gap-2">
         <Button variant="secondary" onClick={() => void save()}>Save</Button>
-        {saved ? <span className="text-xs font-medium text-emerald-700">Saved</span> : null}
+        {saved ? <span className="anim-fade text-xs font-medium text-emerald-700">Saved</span> : null}
       </div>
     </div>
   );
@@ -289,8 +289,9 @@ export function StockPage() {
       title="Stock"
       subtitle={data === undefined ? undefined : `${buckets.length} item${buckets.length === 1 ? "" : "s"}${data.low > 0 ? ` · ${data.low} low` : ""}`}
       action={<Link to="/stock/move?mode=seed" className="text-sm font-medium text-amber-800">+ Seed</Link>}
+      contentClass="stagger"
     >
-      {data === undefined && <LoadingRow label="Weighing stock…" />}
+      {data === undefined && <ListSkeleton rows={2} label="Loading stock" />}
 
       {data !== undefined && buckets.length === 0 && (
         <EmptyState
@@ -525,7 +526,7 @@ export function StockMovePage() {
       backTo={backTo}
       backLabel={fromItem ? "Item" : "Stock"}
     >
-      <form className="flex flex-col gap-3" onSubmit={(e) => { void submit(e); }}>
+      <form className="flow-step flex flex-col gap-3" onSubmit={(e) => { void submit(e); }}>
         <Card>
           <div className="flex flex-col gap-3">
             <Segmented

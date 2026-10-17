@@ -187,7 +187,7 @@ export function ConversionForm() {
     const d = voucherDeltas(preview);
     return (
       <div className="mx-auto w-full max-w-xl px-4 pb-6 pt-4">
-        <div className="flex flex-col gap-3">
+        <div className="flow-step flex flex-col gap-3">
           <FlowHeader tone="violet" title="Review entry" context={partyName} current={2} labels={["Party", "Rate", "Review"]} />
           <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
             partyName={partyName} posting={posting} error={error}
@@ -202,7 +202,7 @@ export function ConversionForm() {
     <div className="mx-auto w-full max-w-xl px-4 pb-6 pt-4">
       <div className="flex flex-col gap-3">
         <FlowHeader tone="violet" title="Convert" backTo={backTo} context={partyName || undefined} current={1} labels={["Party", "Rate", "Review"]} />
-        <form className="flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
+        <form className="flow-step flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
           <Card>
           <div className="flex flex-col gap-3">
             <PartyPicker value={partyId} onChange={(id) => setValue("partyId", id)} />
@@ -280,7 +280,7 @@ export function ConversionForm() {
             </details>
           </div>
         </Card>
-        {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
+        {error ? <p className="shake text-sm font-medium text-red-700" role="alert">{error}</p> : null}
         <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">{en.voucher.review} →</Button></StickyCta>
       </form>
       {prompt}

@@ -186,7 +186,7 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
     const d = voucherDeltas(preview);
     return (
       <div className={shell}>
-        <div className="flex flex-col gap-3">
+        <div className="flow-step flex flex-col gap-3">
           <FlowHeader tone={tone} title="Review entry" context={partyName} current={2} labels={["Party", "Amount", "Review"]} />
           <Review voucher={preview} cash={d.cashPaise} gold={d.goldFineMg} silver={d.silverFineMg}
             partyName={partyName} posting={posting} error={error}
@@ -211,7 +211,7 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
           labels={["Party", "Amount", "Review"]}
         />
         {step === 0 && (
-          <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); nextFromParty(); }}>
+          <form className="flow-step flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); nextFromParty(); }}>
             <Card>
               <div className="flex flex-col gap-3">
                 <div className="text-sm text-stone-500">{kind === "RECEIPT" ? "Who paid you?" : "Who did you pay?"}</div>
@@ -219,12 +219,12 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
                 <Field label={en.voucher.date}><Input type="date" {...register("businessDate", { required: true })} max={todayLocal()} /></Field>
               </div>
             </Card>
-            {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
+            {error ? <p className="shake text-sm font-medium text-red-700" role="alert">{error}</p> : null}
             <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">Continue →</Button></StickyCta>
           </form>
         )}
         {step === 1 && (
-          <form className="flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
+          <form className="flow-step stagger flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
             <Card>
               <div className="flex flex-col gap-3">
                 <Field label={kind === "RECEIPT" ? "Cash received" : "Cash paid"} unit={en.units.inr}>
@@ -295,7 +295,7 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
               <Field label="Notes (optional)"><Textarea {...register("notes")} rows={2} /></Field>
             </div>
           </details>
-          {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
+          {error ? <p className="shake text-sm font-medium text-red-700" role="alert">{error}</p> : null}
           <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">{en.voucher.review} →</Button></StickyCta>
         </form>
       )}

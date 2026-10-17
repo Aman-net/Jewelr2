@@ -97,7 +97,7 @@ export function PartyForm({ onDone }: { onDone: (id: string, duplicateName: bool
 
 export function PartyNewPage({ onDone }: { onDone: (id: string, dup: boolean) => void }) {
   return (
-    <Page title={en.party.add} backTo="/parties" backLabel="Parties">
+    <Page title={en.party.add} backTo="/parties" backLabel="Parties" contentClass="stagger">
       <PartyForm onDone={onDone} />
     </Page>
   );

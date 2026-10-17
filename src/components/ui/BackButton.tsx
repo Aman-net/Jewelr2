@@ -21,11 +21,11 @@ export function BackButton({ fallback, label = "Back", className }: {
       type="button"
       onClick={() => navigate(fallback, { replace: true })}
       className={cn(
-        "inline-flex min-h-11 items-center gap-0.5 rounded-full py-1 pl-1 pr-3 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100/70 active:bg-amber-100",
+        "inline-flex min-h-11 items-center gap-0.5 rounded-full py-1 pl-1 pr-3 text-sm font-semibold text-amber-800 transition-[color,background-color,transform] duration-150 hover:bg-amber-100/70 active:scale-95 active:bg-amber-100",
         className,
       )}
     >
-      <ChevronLeft size={20} strokeWidth={2.5} aria-hidden />
+      <ChevronLeft size={20} strokeWidth={2.5} aria-hidden className="-ml-0.5 transition-transform duration-150 active:-translate-x-0.5" />
       {label}
     </button>
   );

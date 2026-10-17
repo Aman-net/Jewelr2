@@ -440,7 +440,7 @@ export function BillPage() {
   };
 
   return (
-    <Page title={`Bill · ${party.name}`} backTo={`/parties/${id}`} backLabel="Khata">
+    <Page title={`Bill · ${party.name}`} backTo={`/parties/${id}`} backLabel="Khata" contentClass="stagger">
       <div className="bill-controls flex flex-col gap-3">
         <Card>
           <div className="grid grid-cols-2 gap-2">

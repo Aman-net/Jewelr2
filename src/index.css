@@ -5,9 +5,81 @@
   --font-sans: system-ui, "Segoe UI", Roboto, "Noto Sans", sans-serif;
 }
 
-html {
-  -webkit-tap-highlight-color: transparent;
-  overscroll-behavior: none;
+/*
+ * ── Motion system ─────────────────────────────────────────────────────────
+ * One shared language of durations, easings and keyframes; every animation in
+ * the app draws from here so nothing feels off-tempo. Only transform/opacity
+ * animate (compositor-driven, no layout cost on the operator's phone).
+ * ──────────────────────────────────────────────────────────────────────────
+ */
+:root {
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --dur-slow: 320ms;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes flow-step-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes sheet-down {
+  from { transform: translateY(0); }
+  to { transform: translateY(105%); }
+}
+
+@keyframes bar-in {
+  from { opacity: 0; transform: translateY(-100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes nav-in {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.6); }
+  60% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ring-pulse {
+  0% { box-shadow: 0 0 0 0 rgb(16 185 129 / 0.35); }
+  100% { box-shadow: 0 0 0 14px rgb(16 185 129 / 0); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
 }
 
 body {
@@ -34,49 +106,145 @@ textarea {
   padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
 }
 
-@keyframes sheet-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
+/* ── Composition utilities ──────────────────────────────────────────────── */
+
+/* Every screen the router paints gets the same gentle entrance: one short
+ * fade-and-settle, fast enough to read as continuity, long enough to feel
+ * intentional. Runs once per mount (page switches remount routes). */
+main > * {
+  animation: page-in var(--dur-base) var(--ease-out) backwards;
+}
+
+/* Staggered entrance for lists/grids: apply to a container, children cascade
+ * in. Delays cap out so long lists don't feel slow; fill-mode backwards keeps
+ * late children invisible (not blinking) until their turn. */
+.stagger > * {
+  animation: rise-in var(--dur-slow) var(--ease-out) backwards;
+}
+.stagger > :nth-child(2) { animation-delay: 40ms; }
+.stagger > :nth-child(3) { animation-delay: 80ms; }
+.stagger > :nth-child(4) { animation-delay: 120ms; }
+.stagger > :nth-child(5) { animation-delay: 160ms; }
+.stagger > :nth-child(6) { animation-delay: 200ms; }
+.stagger > :nth-child(7) { animation-delay: 240ms; }
+.stagger > :nth-child(8) { animation-delay: 280ms; }
+.stagger > :nth-child(n + 9) { animation-delay: 280ms; }
+
+/* Three-balance hero grid: cells reveal left-to-right, one beat apart. */
+.mini-stagger > * {
+  animation: fade-in var(--dur-slow) var(--ease-out) backwards;
+}
+.mini-stagger > :nth-child(2) { animation-delay: 60ms; }
+.mini-stagger > :nth-child(3) { animation-delay: 120ms; }
+
+/* Fixed overlays must not join a parent's stagger cascade — a sheet that
+ * waits 280ms before appearing reads as a dead tap. */
+.stagger > .no-stagger {
+  animation: none;
+}
+
+/* Tappable card feedback: touch-safe press (mobile) + gentle lift (desktop
+ * hover). Applied by the wrapping link via .tappable; the card itself only
+ * carries the transition, so it stays inert when not tappable. */
+.press {
+  transition: transform var(--dur-fast) var(--ease-out), translate var(--dur-fast) var(--ease-out);
+}
+.tappable:active > .press {
+  transform: scale(0.985);
+}
+@media (hover: hover) {
+  .tappable:hover > .press {
+    translate: 0 -1px;
   }
 }
 
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+/* Full-page tappability cues for non-card rows. */
+.row-press {
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
 
-@keyframes pop-in {
-  0% {
-    opacity: 0;
-    transform: scale(0.6);
-  }
-  60% {
-    opacity: 1;
-    transform: scale(1.08);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
+/* Wizard steps: swap with a short slide-and-settle in flow direction. */
+.flow-step {
+  animation: flow-step-in var(--dur-base) var(--ease-out) backwards;
 }
 
-.sheet-panel {
-  animation: sheet-up 0.22s ease-out;
+.bar-in {
+  animation: bar-in var(--dur-base) var(--ease-out) backwards;
 }
 
+.nav-in {
+  animation: nav-in var(--dur-base) var(--ease-out) backwards;
+}
+
+/* Legacy names, kept working for existing call sites. */
 .fade-in {
-  animation: fade-in 0.18s ease-out;
+  animation: fade-in var(--dur-fast) var(--ease-out);
 }
 
 .pop-in {
-  animation: pop-in 0.35s ease-out;
+  animation: pop-in 0.35s var(--ease-out-back);
+}
+
+.sheet-panel {
+  animation: sheet-up var(--dur-base) var(--ease-out);
+}
+
+/* Exit half of the sheet: scrim dims out, panel slides home. Driven by
+ * Sheet's delayed unmount so the close reads as motion, not a flicker. */
+.backdrop {
+  animation: fade-in var(--dur-fast) var(--ease-out) backwards;
+}
+.sheet-close .backdrop {
+  animation: fade-out var(--dur-fast) var(--ease-out) forwards;
+}
+.sheet-close .sheet-panel {
+  animation: sheet-down var(--dur-base) var(--ease-in) forwards;
+}
+
+/* Error copy arrives with a nudge, not a flash. */
+.anim-rise {
+  animation: rise-in var(--dur-base) var(--ease-out) backwards;
+}
+
+.anim-fade {
+  animation: fade-in var(--dur-fast) var(--ease-out) backwards;
+}
+
+/* One soft pulse around the success mark. */
+.ring-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  animation: ring-pulse 0.6s var(--ease-out) 0.1s backwards;
+}
+
+/* Validation nudge for form-level errors. */
+.shake {
+  animation: shake 160ms ease-in-out 1;
+}
+
+/* Collapsible <details> reveal their bodies with the shared rise. */
+details[open] > :not(summary) {
+  animation: rise-in var(--dur-base) var(--ease-out) backwards;
+}
+
+/* All keyboard callers see where they are; taps and mouse stay clean. */
+:focus-visible {
+  outline: 2px solid var(--color-amber-700);
+  outline-offset: 2px;
+}
+
+/* Motion is a courtesy: honor the OS preference everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+  }
 }
 
 @media print {
@@ -99,5 +267,12 @@ textarea {
   .bill-sheet {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+  /* Paper never animates: the bill must print exactly as composed. */
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

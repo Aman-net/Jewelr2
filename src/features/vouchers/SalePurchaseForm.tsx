@@ -325,7 +325,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
     const d = voucherDeltas(preview);
     return (
       <div className={shell}>
-        <div className="flex flex-col gap-3">
+        <div className="flow-step flex flex-col gap-3">
           <FlowHeader tone={tone} title="Review entry" context={partyName} current={2} labels={["Party", "Goods", "Review"]} />
           {shorts.length > 0 && (
             <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
@@ -360,7 +360,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
           labels={["Party", "Goods", "Review"]}
         />
       {step === 0 && (
-        <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void nextFromParty(); }}>
+        <form className="flow-step flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void nextFromParty(); }}>
           <Card>
             <div className="flex flex-col gap-3">
               <div className="text-sm text-stone-500">{kind === "SALE" ? "Who is buying?" : "Who are you buying from?"}</div>
@@ -375,12 +375,12 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
               </div>
             </div>
           </Card>
-          {reviewError ? <p className="text-sm font-medium text-red-700">{reviewError}</p> : null}
+          {reviewError ? <p className="shake text-sm font-medium text-red-700" role="alert">{reviewError}</p> : null}
           <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">Continue →</Button></StickyCta>
         </form>
       )}
       {step === 1 && (
-        <form className="flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
+        <form className="flow-step stagger flex flex-col gap-3" onSubmit={(e) => { void onReview(e); }}>
           {fields.map((f, i) => (
             <LineCard
               key={f.id}
@@ -426,7 +426,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
               </Field>
             </div>
           </details>
-          {reviewError ? <p className="text-sm font-medium text-red-700">{reviewError}</p> : null}
+          {reviewError ? <p className="shake text-sm font-medium text-red-700" role="alert">{reviewError}</p> : null}
           <StickyCta><Button type="submit" full className="min-h-14 text-lg shadow-lg">{en.voucher.review} →</Button></StickyCta>
         </form>
       )}

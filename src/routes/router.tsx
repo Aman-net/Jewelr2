@@ -29,7 +29,7 @@ const StockMovePage = lazy(() => import("../features/stock/Stock.tsx").then((m) 
 function deferred(node: ReactNode) {
   return (
     <Suspense fallback={
-      <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-3 px-4 pt-16 text-sm text-stone-500">
+      <div className="anim-fade mx-auto flex w-full max-w-xl flex-col items-center gap-3 px-4 pt-16 text-sm text-stone-500">
         <Spinner className="h-8 w-8" />
         Loading…
       </div>

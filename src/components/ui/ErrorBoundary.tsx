@@ -36,12 +36,12 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, State> 
     if (!error) return this.props.children;
     return (
       <div className="mx-auto flex min-h-svh w-full max-w-xl flex-col gap-3 px-4 pb-6 pt-16">
-        <div className="text-2xl font-bold tracking-tight text-stone-900">Something went wrong</div>
-        <p className="text-sm text-stone-600">
+        <div className="anim-rise text-2xl font-bold tracking-tight text-stone-900">Something went wrong</div>
+        <p className="anim-rise text-sm text-stone-600" style={{ animationDelay: "60ms" }}>
           Your entries are safe — this is a display problem, not lost data. If it repeats,
           note the detail below when reporting it.
         </p>
-        <details className="rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
+        <details className="anim-rise rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm" style={{ animationDelay: "120ms" }}>
           <summary className="cursor-pointer text-sm font-medium text-stone-700">Error detail</summary>
           <p className="mt-1 break-words text-xs text-red-800">{error.message}</p>
           {at ? <p className="mt-1 text-xs text-stone-500">{at}</p> : null}

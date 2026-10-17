@@ -30,15 +30,15 @@ const groups = [
 /** What happened? Grouped action tiles in operator language. */
 export function NewEntryPicker() {
   return (
-    <Page title="New entry" backTo="/" backLabel="Home">
+    <Page title="New entry" backTo="/" backLabel="Home" contentClass="stagger">
       <p className="-mt-2 text-sm text-stone-500">What just happened? Pick one — the rest follows.</p>
       {groups.map((g) => (
         <div key={g.title}>
           <div className="mb-1.5 mt-1 text-xs font-semibold uppercase tracking-widest text-stone-500">{g.title}</div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="stagger grid grid-cols-2 gap-2">
             {g.items.map((e) => (
-              <Link key={e.to} to={`/vouchers/new/${e.to}`}>
-                <div className="flex h-full flex-col items-start gap-2 rounded-3xl border border-stone-200 bg-white p-4 shadow-sm active:bg-amber-50">
+              <Link key={e.to} to={`/vouchers/new/${e.to}`} className="tappable block">
+                <div className="press flex h-full flex-col items-start gap-2 rounded-3xl border border-stone-200 bg-white p-4 shadow-sm active:bg-amber-50">
                   <span className={cn("flex h-10 w-10 items-center justify-center rounded-full", e.tint)}>
                     <e.Icon size={20} />
                   </span>

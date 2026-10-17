@@ -3,15 +3,17 @@ import { BackButton } from "./BackButton.tsx";
 import { formatGram, formatINR } from "../../lib/format.ts";
 import { cn } from "../../lib/cn.ts";
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn("rounded-2xl border border-stone-200 bg-white p-4 shadow-sm", className)}>{children}</div>;
+  return <div className={cn("press rounded-2xl border border-stone-200 bg-white p-4 shadow-sm", className)}>{children}</div>;
 }
 
-export function Page({ title, subtitle, action, backTo, backLabel, children }: {
+export function Page({ title, subtitle, action, backTo, backLabel, contentClass, children }: {
   title: string;
   subtitle?: string;
   action?: ReactNode;
   backTo?: string;
   backLabel?: string;
+  /** Opt-in stagger for list-shaped pages: children cascade in on mount. */
+  contentClass?: string;
   children: ReactNode;
 }) {
   return (
@@ -24,7 +26,7 @@ export function Page({ title, subtitle, action, backTo, backLabel, children }: {
         </div>
         {action}
       </div>
-      <div className="flex flex-col gap-3">{children}</div>
+      <div className={cn("flex flex-col gap-3", contentClass)}>{children}</div>
     </div>
   );
 }
@@ -71,7 +73,7 @@ export function BalanceGrid({ cashPaise, goldFineMg, silverFineMg, dark }: {
     },
   ];
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="mini-stagger grid grid-cols-3 gap-2">
       {cells.map((c) => (
         <div key={c.label} className={cn("rounded-xl px-2 py-2 text-center", dark ? "bg-white/10" : "bg-stone-50")}>
           <div className={cn("flex items-center justify-center gap-1 text-[11px] font-medium uppercase tracking-wide", faint)}>
