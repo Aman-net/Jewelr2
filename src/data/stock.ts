@@ -1,5 +1,5 @@
 import { tradeMoves } from "../domain/index.ts";
-import type { TradeMove, Voucher } from "../domain/index.ts";
+import type { LabourMode, TradeMove, Voucher } from "../domain/index.ts";
 import { roundMetalMg } from "../domain/numeric/rounding.ts";
 import { uuid } from "../lib/uuid.ts";
 import { db } from "./db.ts";
@@ -18,9 +18,17 @@ export interface StockBucket {
 export interface StockMove extends StockEntryRow {
   /** Voucher type for trade rows (SALE/PURCHASE/REVERSAL derivation). */
   voucherType?: string;
+  /** Labour from the source voucher line, so stock shows what labour an item moved at. */
+  labourMode?: string;
+  labourRatePaise?: number;
+  labourPaise?: number;
 }
 
 const bucketKey = (metal: string, name: string) => `${metal}|${name.trim().toLowerCase()}`;
+
+/** Stock row ↔ voucher line matching: a voucher line is the labour source. */
+const lineKey = (voucherId: string, metal: string, name: string) =>
+  `${voucherId}|${metal}|${name.trim().toLowerCase()}`;
 
 /** Aggregate rows into per-(metal, item) buckets. Names match case-insensitively. */
 export function aggregateStock(rows: StockEntryRow[]): StockBucket[] {
@@ -67,8 +75,23 @@ export async function getStockMoves(metal: string, name: string, dbx: JewelrDb =
         : a.createdAt.localeCompare(b.createdAt)
       : a.businessDate.localeCompare(b.businessDate),
   );
-  const vouchers = new Map((await dbx.vouchers.toArray()).map((v) => [v.id, v.type]));
-  return rows.map((r) => ({ ...r, voucherType: r.voucherId ? vouchers.get(r.voucherId) : undefined }));
+  const [vouchers, lines] = await Promise.all([dbx.vouchers.toArray(), dbx.voucher_lines.toArray()]);
+  const typeById = new Map(vouchers.map((v) => [v.id, v.type]));
+  // Labour is per voucher line, not per stock row — join it back so the item
+  // page can show what labour an item was bought (or sold) at.
+  const labourByLine = new Map<string, { labourMode?: string; labourRatePaise?: number; labourPaise: number }>();
+  for (const l of lines) {
+    labourByLine.set(lineKey(l.voucherId, l.metalType, l.categoryName), {
+      labourMode: l.labourMode,
+      labourRatePaise: l.labourRatePaise,
+      labourPaise: l.labourPaise,
+    });
+  }
+  return rows.map((r) => ({
+    ...r,
+    voucherType: r.voucherId ? typeById.get(r.voucherId) : undefined,
+    ...(r.voucherId ? (labourByLine.get(lineKey(r.voucherId, r.metal, r.itemName)) ?? {}) : {}),
+  }));
 }
 
 /** Stock rows for a posted trade voucher (signed by shelf direction). */
@@ -258,6 +281,9 @@ export interface ItemCfg {
   defaultTunchScaled?: number;
   lowMg?: number;
   lowPcs?: number;
+  /** Pre-defined selling labour, auto-filled on SALE lines. Mode and rate travel together. */
+  sellingLabourMode?: LabourMode;
+  sellingLabourRatePaise?: number;
 }
 
 const cfgKeyFor = (metal: string, name: string) => `itemCfg:${metal}:${name.trim().toLowerCase()}`;
@@ -266,10 +292,16 @@ function parseCfg(value: string | undefined): ItemCfg {
   if (!value) return {};
   try {
     const r = JSON.parse(value) as ItemCfg;
+    const mode = r.sellingLabourMode === "PER_PIECE" || r.sellingLabourMode === "PER_KG" ? r.sellingLabourMode : undefined;
+    const rate =
+      typeof r.sellingLabourRatePaise === "number" && Number.isInteger(r.sellingLabourRatePaise) && r.sellingLabourRatePaise > 0
+        ? r.sellingLabourRatePaise
+        : undefined;
     return {
       ...(typeof r.defaultTunchScaled === "number" ? { defaultTunchScaled: r.defaultTunchScaled } : {}),
       ...(typeof r.lowMg === "number" ? { lowMg: r.lowMg } : {}),
       ...(typeof r.lowPcs === "number" ? { lowPcs: r.lowPcs } : {}),
+      ...(mode !== undefined && rate !== undefined ? { sellingLabourMode: mode, sellingLabourRatePaise: rate } : {}),
     };
   } catch {
     return {};
@@ -301,11 +333,26 @@ export async function setItemCfg(
     if (!Number.isInteger(patch.lowPcs) || patch.lowPcs < 0) throw new Error("Low-stock pieces must be a whole number");
     clean.lowPcs = patch.lowPcs;
   }
+  if (patch.sellingLabourMode !== undefined) {
+    if (patch.sellingLabourMode !== "PER_PIECE" && patch.sellingLabourMode !== "PER_KG") {
+      throw new Error("Selling labour must be per piece or per kg");
+    }
+    clean.sellingLabourMode = patch.sellingLabourMode;
+  }
+  if (patch.sellingLabourRatePaise !== undefined) {
+    if (!Number.isInteger(patch.sellingLabourRatePaise) || patch.sellingLabourRatePaise <= 0) {
+      throw new Error("Selling labour rate must be more than zero");
+    }
+    clean.sellingLabourRatePaise = patch.sellingLabourRatePaise;
+  }
   const next = { ...(await getItemCfg(metal, name, dbx)), ...clean };
   // Clearing: explicit undefined removes the key.
-  for (const k of ["defaultTunchScaled", "lowMg", "lowPcs"] as const) {
+  for (const k of ["defaultTunchScaled", "lowMg", "lowPcs", "sellingLabourMode", "sellingLabourRatePaise"] as const) {
     if (patch[k] === undefined && k in patch) delete next[k];
   }
+  const hasMode = next.sellingLabourMode !== undefined;
+  const hasRate = next.sellingLabourRatePaise !== undefined;
+  if (hasMode !== hasRate) throw new Error("Selling labour needs both a basis and a rate");
   if (Object.keys(next).length === 0) {
     await dbx.app_settings.delete(cfgKeyFor(metal, name));
   } else {

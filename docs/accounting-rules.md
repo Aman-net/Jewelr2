@@ -62,6 +62,21 @@ labour ₹  = round(physicalMg * labourPaisePerGram / 1000)
 Q7 (returns) and Q9 (payment modes) need no calculation rule in v0.1:
 returns = reversal + replacement/`ADJUSTMENT`; payment mode is a tag only.
 
+## Item defaults (master only, added 2026-10-17)
+
+- **Item config** (`data/stock.ts` `setItemCfg`) holds prefill-only defaults:
+  default tunch, low-stock weight/pieces, and **selling labour** (mode + rate).
+  These never touch posted history — every posted line snapshots its own tunch
+  and labour at post time.
+- **Selling labour is a prefill, not a calculation.** Picking an item on a SALE
+  line copies the saved mode + rate into the line (the operator can still change
+  it); the posted line stores those values as its own snapshot. Mode and rate
+  travel as a pair — a lone basis or a lone rate is rejected, and a rate must be
+  more than zero.
+- **Stock shows the labour a movement carried**: `getStockMoves` joins each
+  trade movement back to its voucher line, so an item page can show what labour
+  an item was bought or sold at.
+
 ## Data-layer integrity rules (owner-confirmed, enforced in code)
 
 - One **live** opening balance per party (`assertSingleOpening` in

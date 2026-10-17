@@ -78,3 +78,13 @@ export function EmptyState({ title, hint, action }: { title: string; hint: strin
     </div>
   );
 }
+
+/** Section divider: separates stacked blocks so cards don't read as one list. */
+export function SectionLabel({ children, note }: { children: ReactNode; note?: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 px-1 pt-1">
+      <span className="text-xs font-semibold uppercase tracking-widest text-stone-500">{children}</span>
+      {note !== undefined && note !== null ? <span className="text-xs tabular-nums text-stone-400">{note}</span> : null}
+    </div>
+  );
+}

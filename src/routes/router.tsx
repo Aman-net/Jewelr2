@@ -23,6 +23,7 @@ const ItemsPage = lazy(() => import("../features/settings/Items.tsx").then((m) =
 const DetailPage = lazy(() => import("../features/vouchers/VoucherDetail.tsx").then((m) => ({ default: m.VoucherDetailPage })));
 const BillPage = lazy(() => import("../features/bills/Bill.tsx").then((m) => ({ default: m.BillPage })));
 const StockPage = lazy(() => import("../features/stock/Stock.tsx").then((m) => ({ default: m.StockPage })));
+const StockItemPage = lazy(() => import("../features/stock/Stock.tsx").then((m) => ({ default: m.StockItemPage })));
 const StockMovePage = lazy(() => import("../features/stock/Stock.tsx").then((m) => ({ default: m.StockMovePage })));
 
 function deferred(node: ReactNode) {
@@ -58,6 +59,7 @@ const router = createHashRouter([
       { path: "parties/:id/ledger", element: <LedgerRedirect /> },
       { path: "parties/:id/bill", element: deferred(<BillPage />) },
       { path: "stock", element: deferred(<StockPage />) },
+      { path: "stock/item", element: deferred(<StockItemPage />) },
       { path: "stock/move", element: deferred(<StockMovePage />) },
       { path: "vouchers/new", element: <NewEntryPicker /> },
       { path: "vouchers/new/sale", element: <SalePurchaseForm kind="SALE" /> },

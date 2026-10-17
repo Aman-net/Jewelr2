@@ -1,7 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router";
-import { ArrowDownToLine, ArrowUpFromLine, History, Percent, ReceiptText, SlidersHorizontal, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, History, Percent, ReceiptText, Scale, SlidersHorizontal, TrendingDown, TrendingUp } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "../../components/ui/Button.tsx";
 import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
@@ -11,7 +11,6 @@ import { TypeTag, RoleTags } from "../../components/ui/TypeTag.tsx";
 import { Field, Input, Select } from "../../components/ui/Field.tsx";
 import { PartyAvatar } from "../../components/ui/PartyAvatar.tsx";
 import { getBalances, getBalancesAsOf, getLedger, getParty, hasLiveOpening, listGeneratedBills, listVouchers } from "../../data/index.ts";
-import type { VoucherRow } from "../../data/index.ts";
 import { db } from "../../data/index.ts";
 import { en } from "../../i18n/en.ts";
 import { dayLabel, formatDate, formatGram, formatINR, formatTime, todayLocal } from "../../lib/format.ts";
@@ -228,32 +227,37 @@ export function KhataPage() {
       {entries !== undefined && groups.length === 0 && (
         <Card><p className="text-sm text-stone-500">No entries yet. Tap Sell or Got above to record the first one.</p></Card>
       )}
-      {visibleGroups.map((g) => (
-        <div key={g.date}>
-          <div className="mb-1 mt-1 text-xs font-semibold uppercase tracking-wide text-stone-500">{dayLabel(g.date)}</div>
-          <div className="flex flex-col gap-2">
-            {g.rows.map(({ e, balCash, balGold, balSilver }) => (
+      {visibleGroups.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {visibleGroups.flatMap((g) => g.rows).map(({ e, balCash, balGold, balSilver }) => {
+            const type = shortType(e.description);
+            const voucher = voucherMap?.get(e.voucherId);
+            return (
               <Link key={e.voucherId} to={`/vouchers/${e.voucherId}`}>
                 <Card>
-                  <div className="flex items-center gap-2">
-                    <TypeTag type={shortType(e.description)} />
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-900">
-                      {rowTitle(shortType(e.description), voucherMap?.get(e.voucherId), e.description)}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                      <TypeTag type={type} label={PLAIN_TYPE[type] ?? e.description} className="shrink-0" />
+                      {voucher?.referenceNumber ? (
+                        <span className="min-w-0 truncate text-sm font-semibold text-stone-900">Bill {voucher.referenceNumber}</span>
+                      ) : null}
                     </span>
-                    <span className="shrink-0 text-[11px] tabular-nums text-stone-400">{formatTime(e.createdAt)}</span>
+                    <span className="shrink-0 text-[11px] tabular-nums text-stone-400">
+                      {formatDate(e.businessDate)} · {formatTime(e.createdAt)}
+                    </span>
                   </div>
-                  <div className="mt-2 grid grid-cols-3 gap-2">
+                  <div className="mt-2 grid grid-cols-3 gap-1.5">
                     <DeltaCell label="Cash" value={e.cashDeltaPaise} text={formatINR(Math.abs(e.cashDeltaPaise))} tone={e.cashDeltaPaise > 0 ? "text-emerald-700" : "text-red-700"} />
                     <DeltaCell label="Gold" value={e.goldFineDeltaMg} text={formatGram(Math.abs(e.goldFineDeltaMg))} tone="text-amber-700" />
                     <DeltaCell label="Silver" value={e.silverFineDeltaMg} text={formatGram(Math.abs(e.silverFineDeltaMg))} tone="text-slate-600" />
                   </div>
-                  <BalanceLine cash={balCash} gold={balGold} silver={balSilver} />
+                  <BalanceRow cash={balCash} gold={balGold} silver={balSilver} />
                 </Card>
               </Link>
-            ))}
-          </div>
+            );
+          })}
         </div>
-      ))}
+      )}
 
       {totalRows > visibleCount && (
         <Button variant="secondary" full onClick={() => setVisibleCount((c) => c + 50)}>
@@ -332,22 +336,17 @@ function shortType(description: string): string {
   return description.split(" ")[0] ?? description;
 }
 
+/** Professional type words for the entry tag. */
 const PLAIN_TYPE: Record<string, string> = {
   SALE: "Sale",
   PURCHASE: "Purchase",
-  RECEIPT: "Got",
-  PAYMENT: "Gave",
-  CONVERSION: "Rate fix",
+  RECEIPT: "Receipt",
+  PAYMENT: "Payment",
+  CONVERSION: "Conversion",
   OPENING: "Opening",
   ADJUSTMENT: "Adjustment",
   REVERSAL: "Reversal",
 };
-
-/** Paper-style title: plain type + bill no when present. */
-function rowTitle(type: string, voucher: VoucherRow | undefined, fallback: string): string {
-  const base = PLAIN_TYPE[type] ?? fallback;
-  return voucher?.referenceNumber ? `${base} · Bill ${voucher.referenceNumber}` : base;
-}
 
 /** One move cell: label above, signed value below, all three metals visually even. */
 function DeltaCell({ label, value, text, tone }: {
@@ -357,26 +356,28 @@ function DeltaCell({ label, value, text, tone }: {
   tone: string;
 }) {
   return (
-    <div className="rounded-xl bg-stone-50 px-2 py-1.5 text-center">
+    <div className="rounded-lg bg-stone-50 px-1.5 py-1 text-center">
       <div className="text-[10px] font-semibold uppercase tracking-wide text-stone-400">{label}</div>
-      <div className={cn("text-base font-bold tabular-nums", value === 0 ? "text-stone-300" : tone)}>
+      <div className={cn("text-sm font-bold tabular-nums", value === 0 ? "text-stone-300" : tone)}>
         {value === 0 ? "—" : <>{value > 0 ? "+" : "−"}{text}</>}
       </div>
     </div>
   );
 }
 
-/** Quiet balance helper line: all dues in one muted row. */
-function BalanceLine({ cash, gold, silver }: { cash: number; gold: number; silver: number }) {
-  const signed = (v: number, t: string) => (v === 0 ? null : `${v > 0 ? "+" : "−"}${t}`);
+/** Running balance strip: scale icon + label on the left, signed totals right. */
+function BalanceRow({ cash, gold, silver }: { cash: number; gold: number; silver: number }) {
   const parts = [
-    signed(cash, formatINR(Math.abs(cash))),
+    `${cash < 0 ? "−" : cash > 0 ? "+" : ""}${formatINR(Math.abs(cash))}`,
     gold !== 0 ? `${gold > 0 ? "+" : "−"}G ${formatGram(Math.abs(gold))}` : null,
     silver !== 0 ? `${silver > 0 ? "+" : "−"}S ${formatGram(Math.abs(silver))}` : null,
   ].filter((x): x is string => x !== null);
   return (
-    <div className="mt-2 border-t border-dashed border-stone-200 pt-1.5 text-[11px] tabular-nums text-stone-500">
-      Bal {parts.length > 0 ? parts.join(" · ") : formatINR(0)}
+    <div className="mt-2 flex items-center justify-between gap-2 border-t border-dashed border-stone-200 pt-1.5">
+      <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-stone-500">
+        <Scale size={12} /> Balance
+      </span>
+      <span className="min-w-0 truncate text-[11px] font-semibold tabular-nums text-stone-600">{parts.join(" · ")}</span>
     </div>
   );
 }

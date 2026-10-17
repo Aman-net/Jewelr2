@@ -166,6 +166,34 @@ describe("shop stock", () => {
     await expect(setItemCfg("SILVER", "Payal", { defaultTunchScaled: 10_001 }, tdb)).rejects.toThrow(/tunch/i);
   });
 
+  it("saves selling labour and clears it as a pair", async () => {
+    await setItemCfg("SILVER", "Payal", { sellingLabourMode: "PER_PIECE", sellingLabourRatePaise: 5000 }, tdb);
+    expect(await getItemCfg("SILVER", "Payal", tdb)).toEqual({ sellingLabourMode: "PER_PIECE", sellingLabourRatePaise: 5000 });
+    // Mode and rate are a pair — neither alone is meaningful on a fresh item.
+    await expect(setItemCfg("SILVER", "Bichiya", { sellingLabourMode: "PER_KG" }, tdb)).rejects.toThrow(/both/i);
+    await expect(setItemCfg("SILVER", "Bichiya", { sellingLabourRatePaise: 100 }, tdb)).rejects.toThrow(/both/i);
+    await expect(setItemCfg("SILVER", "Bichiya", { sellingLabourMode: "PER_KG", sellingLabourRatePaise: 0 }, tdb)).rejects.toThrow(/more than zero/i);
+    // Clearing both drops the keys and keeps the rest of the config.
+    await setItemCfg("SILVER", "Payal", { defaultTunchScaled: 8000 }, tdb);
+    await setItemCfg("SILVER", "Payal", { sellingLabourMode: undefined, sellingLabourRatePaise: undefined }, tdb);
+    expect(await getItemCfg("SILVER", "Payal", tdb)).toEqual({ defaultTunchScaled: 8000 });
+  });
+
+  it("stock movements carry the source line's labour", async () => {
+    await postVoucher(
+      { type: "PURCHASE", partyId: supplier, businessDate: "2026-01-05", lines: [{ ...payalLine, labourMode: "PER_PIECE", labourRatePaise: 5000 }] },
+      tdb,
+    );
+    await seedStock([{ metal: "SILVER", name: "Payal", physicalMg: 10_000, tunchScaled: 8000 }], "2026-01-02", undefined, tdb);
+    const moves = await getStockMoves("SILVER", "Payal", tdb);
+    expect(moves.find((m) => m.voucherType === "PURCHASE")).toMatchObject({
+      labourMode: "PER_PIECE",
+      labourRatePaise: 5000,
+      labourPaise: 20_000,
+    });
+    expect(moves.find((m) => m.reason === "Opening count")?.labourPaise).toBeUndefined();
+  });
+
   it("backup carries stock and restores it", async () => {
     await seedStock(
       [{ metal: "SILVER", name: "Payal", physicalMg: 500_000, tunchScaled: 8000 }],

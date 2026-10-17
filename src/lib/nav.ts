@@ -28,7 +28,17 @@ export function parentFor(pathname: string, search = ""): string | null {
   if (pathname === "/settings/items") return "/settings/backup";
 
   if (pathname === "/stock") return "/";
-  if (pathname === "/stock/move") return "/stock";
+  if (pathname === "/stock/item") return "/stock";
+  if (pathname === "/stock/move") {
+    // Adjusting a known item returns to its page; seeding returns to the list.
+    const p = new URLSearchParams(search);
+    const name = p.get("name");
+    const metal = p.get("metal");
+    if (p.get("mode") === "adjust" && name && (metal === "GOLD" || metal === "SILVER")) {
+      return `/stock/item?metal=${metal}&name=${encodeURIComponent(name)}`;
+    }
+    return "/stock";
+  }
 
   // /vouchers/:id and anything unknown.
   if (/^\/vouchers\/[^/]+$/.test(pathname)) return "/";

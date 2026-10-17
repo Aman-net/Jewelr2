@@ -44,45 +44,46 @@ export function DuesHead({ cashPaise, goldFineMg, silverFineMg, size = "lg" }: {
   );
 }
 
-/** Compact dues for rows. Metal dues lead when present — owners settle metal
- * in metal, so the grams owed are the number they act on first. */
+/** Compact dues for rows, symbol convention like the rest of the app:
+ * "+₹500 · +G 80 g · −S 20 g" (+ = you get, − = you give). Metal dues lead. */
 export function DuesLine({ cashPaise, goldFineMg, silverFineMg }: {
   cashPaise: number;
   goldFineMg: number;
   silverFineMg: number;
 }) {
+  const signed = (v: number, text: string) => (v === 0 ? text : `${v > 0 ? "+" : "−"}${text}`);
   const metalFirst = goldFineMg !== 0 || silverFineMg !== 0;
   if (!metalFirst) {
     return (
       <div className="flex shrink-0 flex-col items-end gap-1">
         <div className={cn(
-          "text-sm font-bold",
+          "text-sm font-bold tabular-nums",
           cashPaise === 0 ? "text-stone-400" : cashPaise > 0 ? "text-emerald-700" : "text-red-700",
         )}>
-          {formatINR(cashPaise)}
+          {signed(cashPaise, formatINR(Math.abs(cashPaise)))}
         </div>
       </div>
     );
   }
   return (
     <div className="flex shrink-0 flex-col items-end gap-0.5">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 text-sm font-bold tabular-nums">
         {goldFineMg !== 0 && (
-          <span className="text-sm font-bold text-amber-700">
-            {goldFineMg > 0 ? "Get " : "Give "}{formatGram(Math.abs(goldFineMg))} gold
+          <span className={goldFineMg > 0 ? "text-emerald-700" : "text-red-700"}>
+            {signed(goldFineMg, `G ${formatGram(Math.abs(goldFineMg))}`)}
           </span>
         )}
         {silverFineMg !== 0 && (
-          <span className="text-sm font-bold text-slate-600">
-            {silverFineMg > 0 ? "Get " : "Give "}{formatGram(Math.abs(silverFineMg))} silver
+          <span className={silverFineMg > 0 ? "text-emerald-700" : "text-red-700"}>
+            {signed(silverFineMg, `S ${formatGram(Math.abs(silverFineMg))}`)}
           </span>
         )}
       </div>
       <span className={cn(
-        "text-xs font-medium",
+        "text-xs font-medium tabular-nums",
         cashPaise === 0 ? "text-stone-400" : cashPaise > 0 ? "text-emerald-700" : "text-red-700",
       )}>
-        {formatINR(cashPaise)}
+        {signed(cashPaise, formatINR(Math.abs(cashPaise)))}
       </span>
     </div>
   );

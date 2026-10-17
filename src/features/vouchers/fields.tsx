@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Sheet } from "../../components/ui/Bits.tsx";
-import { Field, Input } from "../../components/ui/Field.tsx";
+import { Field, SearchInput } from "../../components/ui/Field.tsx";
 import { usePartyList } from "../../hooks/useLive.ts";
 import { en } from "../../i18n/en.ts";
 import { cn } from "../../lib/cn.ts";
@@ -61,7 +61,7 @@ export function PartyPicker({ value, onChange, error }: {
       {open && (
         <Sheet title={en.voucher.party} onClose={close}>
           <div className="flex flex-col gap-2">
-            <Input
+            <SearchInput
               placeholder={en.party.search}
               value={q}
               onChange={(e) => setQ(e.target.value)}

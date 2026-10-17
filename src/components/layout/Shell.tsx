@@ -49,6 +49,7 @@ function navHidden(pathname: string): boolean {
     pathname.endsWith("/edit") ||
     pathname.endsWith("/bill") ||
     pathname.endsWith("/move") ||
+    pathname === "/stock/item" ||
     pathname === "/settings/items"
   );
 }

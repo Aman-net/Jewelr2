@@ -6,7 +6,7 @@ import { Chip } from "../../components/ui/Bits.tsx";
 import { Field, Input } from "../../components/ui/Field.tsx";
 import { PartyAvatar } from "../../components/ui/PartyAvatar.tsx";
 import { CashDelta, DuesLine, MetalDelta } from "../../components/ui/Dues.tsx";
-import { TypeTag } from "../../components/ui/TypeTag.tsx";
+import { TypeTag, RoleTags } from "../../components/ui/TypeTag.tsx";
 import { getEntriesInRange, listActivity } from "../../data/index.ts";
 import { en } from "../../i18n/en.ts";
 import { dayLabel, formatGram, formatINR, todayLocal } from "../../lib/format.ts";
@@ -44,7 +44,8 @@ export function SummaryPage() {
     [from, to, typeFilter],
   );
 
-  const nameOf = (id: string) => (parties ?? []).find((p) => p.id === id)?.name ?? "…";
+  const partyOf = (id: string) => (parties ?? []).find((p) => p.id === id);
+  const nameOf = (id: string) => partyOf(id)?.name ?? "…";
 
   const rows = Object.entries(balances ?? {});
   // Any-column dues count (a party owing only metal is invisible to a
@@ -95,7 +96,12 @@ export function SummaryPage() {
           {toReceive.map(([partyId, b]) => (
             <Link key={partyId} to={`/parties/${partyId}`} className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0">
               <PartyAvatar name={nameOf(partyId)} />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-900">{nameOf(partyId)}</span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-stone-900">{nameOf(partyId)}</div>
+                <div className="mt-0.5">
+                  <RoleTags isCustomer={partyOf(partyId)?.isCustomer ?? false} isSupplier={partyOf(partyId)?.isSupplier ?? false} />
+                </div>
+              </div>
               <DuesLine cashPaise={b.cashPaise} goldFineMg={b.goldFineMg} silverFineMg={b.silverFineMg} />
             </Link>
           ))}
@@ -107,7 +113,12 @@ export function SummaryPage() {
           {toPay.map(([partyId, b]) => (
             <Link key={partyId} to={`/parties/${partyId}`} className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0">
               <PartyAvatar name={nameOf(partyId)} />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-900">{nameOf(partyId)}</span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-stone-900">{nameOf(partyId)}</div>
+                <div className="mt-0.5">
+                  <RoleTags isCustomer={partyOf(partyId)?.isCustomer ?? false} isSupplier={partyOf(partyId)?.isSupplier ?? false} />
+                </div>
+              </div>
               <DuesLine cashPaise={b.cashPaise} goldFineMg={b.goldFineMg} silverFineMg={b.silverFineMg} />
             </Link>
           ))}

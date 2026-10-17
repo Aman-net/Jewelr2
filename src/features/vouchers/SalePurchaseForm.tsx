@@ -141,17 +141,22 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
   const stockOf = (metal: MetalType, name: string): StockBucket | undefined =>
     name.trim() ? stockMap.get(`${metal}|${name.trim().toLowerCase()}`) : undefined;
 
-  /** Item pick: set name, prefill the item's default tunch when the field is empty. */
+  /**
+   * Item pick: set the name, prefill the item's default tunch when empty, and
+   * (on sales) the item's saved selling labour so the line starts correct.
+   */
   const pickItem = (index: number, metal: MetalType, name: string) => {
     setValue(`lines.${index}.category`, name);
-    const tunchKey = `lines.${index}.agreedTunch` as const;
-    if (!getValues(tunchKey)?.trim()) {
-      void getItemCfg(metal, name).then((cfg) => {
-        if (cfg.defaultTunchScaled !== undefined && !getValues(tunchKey)?.trim()) {
-          setValue(tunchKey, new Decimal(cfg.defaultTunchScaled).div(100).toString());
-        }
-      });
-    }
+    void getItemCfg(metal, name).then((cfg) => {
+      const tunchKey = `lines.${index}.agreedTunch` as const;
+      if (cfg.defaultTunchScaled !== undefined && !getValues(tunchKey)?.trim()) {
+        setValue(tunchKey, new Decimal(cfg.defaultTunchScaled).div(100).toString());
+      }
+      if (kind === "SALE" && cfg.sellingLabourMode !== undefined && cfg.sellingLabourRatePaise !== undefined) {
+        setValue(`lines.${index}.labourMode`, cfg.sellingLabourMode);
+        setValue(`lines.${index}.labourRate`, new Decimal(cfg.sellingLabourRatePaise).div(100).toString());
+      }
+    });
   };
 
   /** Warn-only shorts for SALE review — posting stays allowed. */

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
-import { g3, pairNote, rs2, rowHead, signed2, signedG3, statementNo } from "./StatementPdf.tsx";
+import { APP_BRAND, g3, pairNote, rs2, rowHead, shopNameOf, shopSubLine, signed2, signedG3, statementNo } from "./StatementPdf.tsx";
 import { StatementDoc } from "./StatementPdf.tsx";
+import { EMPTY_SHOP } from "../../data/index.ts";
 
 describe("statement pdf helpers", () => {
   it("numbers are pdf-safe with metal precision", () => {
@@ -13,6 +14,14 @@ describe("statement pdf helpers", () => {
     expect(signed2(0)).toBe("—");
     expect(signedG3(50000, "GOLD")).toBe("+50.000");
     expect(signedG3(50000, "SILVER")).toBe("+50");
+  });
+
+  it("shop header is never blank and drops unfilled parts", () => {
+    expect(APP_BRAND).toBe("Jewelr");
+    expect(shopNameOf(EMPTY_SHOP)).toBe("My Shop");
+    expect(shopNameOf({ ...EMPTY_SHOP, name: "  Sharma Bullion " })).toBe("Sharma Bullion");
+    expect(shopSubLine(EMPTY_SHOP)).toBe("");
+    expect(shopSubLine({ ...EMPTY_SHOP, address: "Sarafa Bazar", phone: "98765 43210" })).toBe("Sarafa Bazar · 98765 43210");
   });
 
   it("heads carry pair serials and pair notes name the reversal", () => {
@@ -30,6 +39,7 @@ describe("statement pdf helpers", () => {
 
   it("renders a silver-only doc to bytes without crashing", async () => {
     const doc = createElement(StatementDoc, {
+      shop: { name: "Sharma Bullion", address: "Sarafa Bazar, Indore", phone: "98765 43210", gstin: "23ABCDE1234F1Z5" },
       partyName: "Riya",
       from: "2026-10-01",
       to: "2026-10-15",

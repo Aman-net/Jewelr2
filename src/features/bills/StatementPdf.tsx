@@ -1,7 +1,7 @@
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { BalanceDelta, Voucher } from "../../domain/index.ts";
 import { formatRate, formatTunch } from "../../lib/format.ts";
-import type { StatementRow } from "../../data/index.ts";
+import type { ShopDetails, StatementRow } from "../../data/index.ts";
 
 /**
  * A4 khata statement PDF, generated on-device (offline-safe).
@@ -13,15 +13,25 @@ import type { StatementRow } from "../../data/index.ts";
  * replace the helpers below later without touching layout.
  */
 
-/** Brand + shop identity until the shop/account store lands (owner-confirmed).
- * Jewelr is the app signature; the shop block will come from accounts later. */
-export const SHOP_DUMMY = {
-  brand: "Jewelr",
-  shop: "[Your Shop Name]",
-  address: "[Shop address, city]",
-  phone: "[Phone]",
-  gstin: "GSTIN [if any]",
-};
+/** Brand + shop identity. Jewelr is the app signature; the shop block comes
+ * from Settings → Shop (see `data/shop.ts`). */
+export const APP_BRAND = "Jewelr";
+
+/** Printed when the operator hasn't set a shop name yet. */
+export const FALLBACK_SHOP_NAME = "My Shop";
+
+/** Shop display name — never blank on paper. */
+export function shopNameOf(shop: ShopDetails): string {
+  return shop.name.trim() || FALLBACK_SHOP_NAME;
+}
+
+/** "address · phone · GSTIN", dropping whatever the operator left blank. */
+export function shopSubLine(shop: ShopDetails): string {
+  return [shop.address, shop.phone, shop.gstin]
+    .map((v) => v.trim())
+    .filter(Boolean)
+    .join(" · ");
+}
 
 /** Deterministic statement number lives in data (logging must not pull the renderer). */
 export { statementNo } from "../../data/statement.ts";
@@ -196,6 +206,7 @@ const s = StyleSheet.create({
 });
 
 export interface StatementDocProps {
+  shop: ShopDetails;
   partyName: string;
   partyMobile?: string;
   from: string;
@@ -232,9 +243,9 @@ export function StatementDoc(p: StatementDocProps) {
         <Text style={s.brandTop}>JEWELR</Text>
         <View style={s.topRow}>
           <View>
-            <Text style={s.shop}>{SHOP_DUMMY.shop}</Text>
-            <Text style={s.shopSub}>{SHOP_DUMMY.address} · {SHOP_DUMMY.phone} · {SHOP_DUMMY.gstin}</Text>
-            <Text style={s.brand}>Statement by {SHOP_DUMMY.brand}</Text>
+            <Text style={s.shop}>{shopNameOf(p.shop)}</Text>
+            {shopSubLine(p.shop) ? <Text style={s.shopSub}>{shopSubLine(p.shop)}</Text> : null}
+            <Text style={s.brand}>Statement by {APP_BRAND}</Text>
           </View>
           <View>
             <Text style={s.docTitle}>KHATA STATEMENT</Text>
@@ -331,7 +342,7 @@ export function StatementDoc(p: StatementDocProps) {
         <View style={s.footer}>
           <Text style={s.footerNote}>Balance as per our books. Please report any difference within 7 days of receiving this statement.</Text>
           <View>
-            <Text style={s.sign}>For {SHOP_DUMMY.shop}{"\n"}Authorised signature</Text>
+            <Text style={s.sign}>For {shopNameOf(p.shop)}{"\n"}Authorised signature</Text>
             <Text style={[s.sign, { marginTop: 8 }]} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
           </View>
         </View>

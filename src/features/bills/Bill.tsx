@@ -7,7 +7,7 @@ import { Field, Input } from "../../components/ui/Field.tsx";
 import { LoadingRow } from "../../components/ui/Loader.tsx";
 import { PartyAvatar } from "../../components/ui/PartyAvatar.tsx";
 import { MetalTag } from "../../components/ui/TypeTag.tsx";
-import { assembleVoucher, db, getParty, getStatement, logGeneratedBill, statementNo } from "../../data/index.ts";
+import { EMPTY_SHOP, assembleVoucher, db, getParty, getShopDetails, getStatement, logGeneratedBill, statementNo } from "../../data/index.ts";
 import { firstOfMonth } from "../../data/statement.ts";
 import type { StatementRow } from "../../data/index.ts";
 import type { Voucher } from "../../domain/index.ts";
@@ -253,7 +253,8 @@ function EntryBlock({ row, voucher, metals }: {
 /**
  * Date-range bill: opening + full-detail entries + period move + closing.
  * Derived and live — reversals rewrite it exactly like the khata.
- * Print via the OS dialog (print CSS hides nav and controls).
+ * Both actions use the same on-device A4 PDF: "PDF bill" shares/downloads it,
+ * "Print" opens it for the OS print dialog.
  */
 export function BillPage() {
   const { id = "" } = useParams();
@@ -264,6 +265,7 @@ export function BillPage() {
   const [attempt, setAttempt] = useState(0);
 
   const party = useLiveQuery(() => getParty(id), [id]);
+  const shop = useLiveQuery(() => getShopDetails(), []);
   const data = useLiveQuery(async () => {
     try {
       const st = await getStatement(id, from, to);
@@ -308,73 +310,86 @@ export function BillPage() {
   };
   const statement = data?.st;
 
-  /** A4 PDF via on-device renderer (lazy — never in the startup bundle). */  const downloadPdf = async () => {
-    if (!statement || !party) return;
+  /** Build the A4 statement PDF once — "PDF bill" and "Print" share it. */
+  const buildBillPdf = async (): Promise<{ blob: Blob; filename: string; no: string; end: string } | null> => {
+    if (!statement || !party) return null;
+    const [{ pdf }, doc] = await Promise.all([
+      import("@react-pdf/renderer"),
+      import("./StatementPdf.tsx"),
+    ]);
+    const days: DocDay[] = groups.map(({ date, rows }) => {
+      const docRows = rows.map((r) => {
+        const v = data?.vouchers.get(r.voucherId);
+        return {
+          sno: r.pair ? `#${r.serial}, #${r.pair.otherSerial}` : `#${r.serial}`,
+          head: doc.rowHead(r.type, v),
+          details: [
+            ...(r.pair ? [doc.pairNote(r.cashDeltaPaise, r.goldFineDeltaMg, r.silverFineDeltaMg, r.pair.reason)] : []),
+            ...(v ? doc.buildDocDetails(v) : []),
+          ],
+          cash: r.cashDeltaPaise,
+          gold: r.goldFineDeltaMg,
+          silver: r.silverFineDeltaMg,
+          balCash: r.balCashPaise,
+          balGold: r.balGoldFineMg,
+          balSilver: r.balSilverFineMg,
+        };
+      });
+      const last = rows[rows.length - 1]!;
+      return { date: formatDate(date), rows: docRows, balCash: last.balCashPaise, balGold: last.balGoldFineMg, balSilver: last.balSilverFineMg };
+    });
+    const end = to || todayLocal();
+    const no = statementNo(id, from, end);
+    const blob = await pdf(
+      <doc.StatementDoc
+        shop={shop ?? EMPTY_SHOP}
+        partyName={party.name}
+        partyMobile={party.mobile}
+        from={from}
+        to={end}
+        fromLabel={from ? formatDate(from) : "Beginning"}
+        toLabel={formatDate(end)}
+        generatedAt={generatedAt}
+        no={no}
+        opening={statement.opening}
+        openingLabel={from ? `Opening balance, before ${formatDate(from)}` : "Opening balance, start"}
+        days={days}
+        entryCount={statement.rows.length}
+        totals={statement.totals}
+        grossIn={statement.grossIn}
+        grossOut={statement.grossOut}
+        closing={statement.closing}
+        closingLabel={`CLOSING BALANCE AS ON ${formatDate(end).toUpperCase()}`}
+        metals={statement.metals}
+      />,
+    ).toBlob();
+    const filename = `Jewelr-${party.name.replace(/[^\w]+/g, "-")}-${from || "Beginning"}-${end}.pdf`;
+    return { blob, filename, no, end };
+  };
+
+  /** Hand the PDF to the OS: share sheet where available, otherwise download. */
+  const shareOrDownload = async (blob: Blob, filename: string) => {
+    const file = new File([blob], filename, { type: "application/pdf" });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename });
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
+  const savePdf = async () => {
     setPdfBusy(true);
     setPdfError("");
     try {
-      const [{ pdf }, doc] = await Promise.all([
-        import("@react-pdf/renderer"),
-        import("./StatementPdf.tsx"),
-      ]);
-      const days: DocDay[] = groups.map(({ date, rows }) => {
-        const docRows = rows.map((r) => {
-          const v = data?.vouchers.get(r.voucherId);
-          return {
-            sno: r.pair ? `#${r.serial}, #${r.pair.otherSerial}` : `#${r.serial}`,
-            head: doc.rowHead(r.type, v),
-            details: [
-              ...(r.pair ? [doc.pairNote(r.cashDeltaPaise, r.goldFineDeltaMg, r.silverFineDeltaMg, r.pair.reason)] : []),
-              ...(v ? doc.buildDocDetails(v) : []),
-            ],
-            cash: r.cashDeltaPaise,
-            gold: r.goldFineDeltaMg,
-            silver: r.silverFineDeltaMg,
-            balCash: r.balCashPaise,
-            balGold: r.balGoldFineMg,
-            balSilver: r.balSilverFineMg,
-          };
-        });
-        const last = rows[rows.length - 1]!;
-        return { date: formatDate(date), rows: docRows, balCash: last.balCashPaise, balGold: last.balGoldFineMg, balSilver: last.balSilverFineMg };
-      });
-      const end = to || todayLocal();
-      const no = statementNo(id, from, end);
-      const blob = await pdf(
-        <doc.StatementDoc
-          partyName={party.name}
-          partyMobile={party.mobile}
-          from={from}
-          to={end}
-          fromLabel={from ? formatDate(from) : "Beginning"}
-          toLabel={formatDate(end)}
-          generatedAt={generatedAt}
-          no={no}
-          opening={statement.opening}
-          openingLabel={from ? `Opening balance, before ${formatDate(from)}` : "Opening balance, start"}
-          days={days}
-          entryCount={statement.rows.length}
-          totals={statement.totals}
-          grossIn={statement.grossIn}
-          grossOut={statement.grossOut}
-          closing={statement.closing}
-          closingLabel={`CLOSING BALANCE AS ON ${formatDate(end).toUpperCase()}`}
-          metals={statement.metals}
-        />,
-      ).toBlob();
-      const filename = `Jewelr-${party.name.replace(/[^\w]+/g, "-")}-${from || "Beginning"}-${end}.pdf`;
-      const file = new File([blob], filename, { type: "application/pdf" });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: filename });
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-      }
-      await logGeneratedBill({ partyId: id, from: from, to: end, statementNo: no, channel: "PDF" }).catch(() => {});
+      const built = await buildBillPdf();
+      if (!built) return;
+      await shareOrDownload(built.blob, built.filename);
+      await logGeneratedBill({ partyId: id, from, to: built.end, statementNo: built.no, channel: "PDF" }).catch(() => {});
     } catch (e) {
       setPdfError(e instanceof Error ? e.message : "Could not make PDF");
     } finally {
@@ -382,16 +397,46 @@ export function BillPage() {
     }
   };
 
+  /**
+   * Print the same A4 PDF, never the screen. The blank tab opens inside the
+   * click gesture so popup blockers stay quiet: on desktop the print dialog
+   * fires, on mobile the PDF viewer carries its own Print action.
+   */
   const printBill = () => {
-    const end = to || todayLocal();
-    void logGeneratedBill({
-      partyId: id,
-      from: from,
-      to: end,
-      statementNo: statementNo(id, from, end),
-      channel: "PRINT",
-    }).catch(() => {});
-    window.print();
+    if (!statement || !party) return;
+    const win = window.open("", "_blank");
+    setPdfBusy(true);
+    setPdfError("");
+    void (async () => {
+      try {
+        const built = await buildBillPdf();
+        if (!built) {
+          win?.close();
+          return;
+        }
+        const url = URL.createObjectURL(built.blob);
+        if (win) {
+          win.location.href = url;
+          win.focus?.();
+          setTimeout(() => {
+            try {
+              if (win.location.href === url) win.print();
+            } catch {
+              /* viewer handles printing */
+            }
+          }, 1200);
+        } else {
+          await shareOrDownload(built.blob, built.filename);
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        await logGeneratedBill({ partyId: id, from, to: built.end, statementNo: built.no, channel: "PRINT" }).catch(() => {});
+      } catch (e) {
+        win?.close();
+        setPdfError(e instanceof Error ? e.message : "Could not make PDF");
+      } finally {
+        setPdfBusy(false);
+      }
+    })();
   };
 
   return (
@@ -414,6 +459,17 @@ export function BillPage() {
             </Button>
           </div>
         </Card>
+
+        {shop !== undefined && !shop.name.trim() ? (
+          <Card className="border-amber-200 bg-amber-50">
+            <p className="text-sm font-medium text-amber-900">
+              Your shop name prints on the bill header. Add it in Settings → Shop.
+            </p>
+            <Link to="/settings/backup" className="mt-1 inline-block text-xs font-semibold text-amber-800">
+              Open Settings ›
+            </Link>
+          </Card>
+        ) : null}
       </div>
 
       {data === undefined ? (
@@ -499,8 +555,8 @@ export function BillPage() {
 
           <div className="bill-controls flex flex-col gap-2">
             <div className="flex gap-2">
-              <div className="flex-1"><Button variant="secondary" full onClick={printBill}>Print</Button></div>
-              <div className="flex-1"><Button full onClick={() => void downloadPdf()} disabled={pdfBusy}>{pdfBusy ? "Making PDF…" : "PDF bill"}</Button></div>
+              <div className="flex-1"><Button variant="secondary" full onClick={printBill} disabled={pdfBusy}>Print</Button></div>
+              <div className="flex-1"><Button full onClick={() => void savePdf()} disabled={pdfBusy}>{pdfBusy ? "Making PDF…" : "PDF bill"}</Button></div>
             </div>
             {pdfError ? <p className="text-sm font-medium text-red-700">{pdfError}</p> : null}
           </div>

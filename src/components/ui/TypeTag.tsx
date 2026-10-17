@@ -11,11 +11,13 @@ const TONES: Record<string, string> = {
   REVERSAL: "bg-red-100 text-red-900",
 };
 
-/** Small colored voucher-type tag, shared by khata rows and activity feeds. */
-export function TypeTag({ type, className }: { type: string; className?: string }) {
+/** Small colored voucher-type tag, shared by khata rows and activity feeds.
+ * `label` overrides the shown text (e.g. professional words) while `type`
+ * still selects the colour. */
+export function TypeTag({ type, label, className }: { type: string; label?: string; className?: string }) {
   return (
     <span className={cn("rounded px-1.5 py-0.5 text-[11px] font-bold", TONES[type] ?? "bg-stone-100 text-stone-600", className)}>
-      {type}
+      {label ?? type}
     </span>
   );
 }

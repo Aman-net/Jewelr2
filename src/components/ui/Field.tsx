@@ -1,4 +1,5 @@
 import type { ChangeEvent, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { Search } from "lucide-react";
 import { cn } from "../../lib/cn.ts";
 
 const controlClass =
@@ -26,6 +27,16 @@ export function Field({ label, unit, error, hint, children }: {
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(controlClass, props.className)} />;
+}
+
+/** Text input with a leading magnifier — one shape for every search box. */
+export function SearchInput(props: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <div className="relative">
+      <Search size={16} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+      <input {...props} className={cn(controlClass, "pl-9", props.className)} />
+    </div>
+  );
 }
 
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {

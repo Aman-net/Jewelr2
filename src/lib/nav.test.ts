@@ -16,7 +16,10 @@ describe("deterministic parents", () => {
     expect(parentFor("/settings/backup")).toBe("/");
     expect(parentFor("/settings/items")).toBe("/settings/backup");
     expect(parentFor("/stock")).toBe("/");
+    expect(parentFor("/stock/item")).toBe("/stock");
     expect(parentFor("/stock/move")).toBe("/stock");
+    expect(parentFor("/stock/move", "?mode=adjust&metal=SILVER&name=Payal")).toBe("/stock/item?metal=SILVER&name=Payal");
+    expect(parentFor("/stock/move", "?mode=seed")).toBe("/stock");
     expect(parentFor("/nope")).toBe("/");
   });
 

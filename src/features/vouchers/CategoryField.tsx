@@ -5,7 +5,7 @@ import { addCustom, getCategorySuggestions } from "../../data/index.ts";
 import type { MetalType } from "../../domain/index.ts";
 import { en } from "../../i18n/en.ts";
 import { Chip, EmptyState, Sheet } from "../../components/ui/Bits.tsx";
-import { Field, Input } from "../../components/ui/Field.tsx";
+import { Field, SearchInput } from "../../components/ui/Field.tsx";
 
 /**
  * Item picker: recent first, then presets, then previously-used customs,
@@ -55,7 +55,7 @@ export function CategoryField({ metal, value, onPick }: {
       {open && (
         <Sheet title={`Pick ${metal === "GOLD" ? "gold" : "silver"} item`} onClose={() => { setOpen(false); setQ(""); }}>
           <div className="flex flex-col gap-3">
-            <Input placeholder={en.item.search} value={q} onChange={(e) => setQ(e.target.value)} inputMode="search" autoFocus />
+            <SearchInput placeholder={en.item.search} value={q} onChange={(e) => setQ(e.target.value)} inputMode="search" autoFocus />
             {recent.length > 0 && (
               <div>
                 <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-stone-500">{en.item.recent}</div>
