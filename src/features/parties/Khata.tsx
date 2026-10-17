@@ -27,12 +27,12 @@ interface EntryAction {
 }
 
 const entryActions: EntryAction[] = [
-  { to: "sale", label: "Sell", hint: "Gave goods", Icon: TrendingUp, tint: "bg-amber-100 text-amber-800", needs: "customer" },
-  { to: "receipt", label: "Got", hint: "Received", Icon: ArrowDownToLine, tint: "bg-emerald-100 text-emerald-800", needs: null },
-  { to: "purchase", label: "Buy", hint: "Took goods", Icon: TrendingDown, tint: "bg-sky-100 text-sky-800", needs: "supplier" },
-  { to: "payment", label: "Gave", hint: "Paid out", Icon: ArrowUpFromLine, tint: "bg-orange-100 text-orange-800", needs: null },
-  { to: "conversion", label: "Rate", hint: "Fix rate", Icon: Percent, tint: "bg-violet-100 text-violet-800", needs: null },
-  { to: "bill", label: "Bill", hint: "Statement", Icon: ReceiptText, tint: "bg-teal-100 text-teal-800", needs: null, href: "BILL" },
+  { to: "sale", label: "Sale", hint: "Goods out", Icon: TrendingUp, tint: "bg-amber-100 text-amber-800", needs: "customer" },
+  { to: "receipt", label: "Receive", hint: "Money in", Icon: ArrowDownToLine, tint: "bg-emerald-100 text-emerald-800", needs: null },
+  { to: "purchase", label: "Purchase", hint: "Goods in", Icon: TrendingDown, tint: "bg-sky-100 text-sky-800", needs: "supplier" },
+  { to: "payment", label: "Pay Out", hint: "Money out", Icon: ArrowUpFromLine, tint: "bg-orange-100 text-orange-800", needs: null },
+  { to: "conversion", label: "Convert", hint: "Fix rate", Icon: Percent, tint: "bg-violet-100 text-violet-800", needs: null },
+  { to: "bill", label: "Statement", hint: "Ledger report", Icon: ReceiptText, tint: "bg-teal-100 text-teal-800", needs: null, href: "BILL" },
 ];
 
 function actionAllowed(party: { isCustomer: boolean; isSupplier: boolean }, needs: "customer" | "supplier" | null): boolean {

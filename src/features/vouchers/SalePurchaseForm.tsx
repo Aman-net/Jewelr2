@@ -296,7 +296,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
     }
   };
 
-  const title = kind === "SALE" ? "Sell goods" : "Buy goods";
+  const title = kind === "SALE" ? "Sale" : "Purchase";
   const tone: FlowTone = kind === "SALE" ? "amber" : "sky";
   const shell = "mx-auto w-full max-w-xl px-4 pb-6 pt-4";
 

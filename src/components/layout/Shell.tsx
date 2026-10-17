@@ -171,26 +171,36 @@ export function Shell() {
       {showNav && (
         <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)]">
           <div className="mx-auto grid max-w-xl grid-cols-5">
-            {tabs.map(({ to, label, Icon, end }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                className={({ isActive }) =>
-                  cn(
-                    "flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium",
-                    isActive ? "text-amber-800" : "text-stone-500",
-                  )
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <Icon size={22} fill={isActive ? "currentColor" : "none"} />
-                    {label}
-                  </>
-                )}
-              </NavLink>
-            ))}
+            {tabs.map(({ to, label, Icon, end }) =>
+              to === "/vouchers/new" ? (
+                /** Center action: raised amber FAB riding the bar's top edge —
+                 * ring halo carves it out of content scrolling behind. */
+                <NavLink key={to} to={to} aria-label={label} className="flex justify-center pt-2">
+                  <span className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-amber-800 text-white shadow-lg shadow-amber-900/30 ring-4 ring-white transition-transform active:scale-95">
+                    <Plus size={26} strokeWidth={2.5} />
+                  </span>
+                </NavLink>
+              ) : (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium",
+                      isActive ? "text-amber-800" : "text-stone-500",
+                    )
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <Icon size={22} fill={isActive ? "currentColor" : "none"} />
+                      {label}
+                    </>
+                  )}
+                </NavLink>
+              ),
+            )}
           </div>
         </nav>
       )}

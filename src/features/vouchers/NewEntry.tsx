@@ -7,21 +7,21 @@ const groups = [
   {
     title: "Goods",
     items: [
-      { to: "sale", title: "Sell goods", hint: "You gave gold/silver — party owes you", Icon: TrendingUp, tint: "bg-amber-100 text-amber-800" },
-      { to: "purchase", title: "Buy goods", hint: "You took gold/silver — you owe", Icon: TrendingDown, tint: "bg-sky-100 text-sky-800" },
+      { to: "sale", title: "Sale", hint: "You gave gold/silver — party owes you", Icon: TrendingUp, tint: "bg-amber-100 text-amber-800" },
+      { to: "purchase", title: "Purchase", hint: "You took gold/silver — you owe", Icon: TrendingDown, tint: "bg-sky-100 text-sky-800" },
     ],
   },
   {
     title: "Money & metal",
     items: [
-      { to: "receipt", title: "Got payment", hint: "Party paid you cash or metal", Icon: ArrowDownToLine, tint: "bg-emerald-100 text-emerald-800" },
-      { to: "payment", title: "Paid out", hint: "You paid cash or metal", Icon: ArrowUpFromLine, tint: "bg-orange-100 text-orange-800" },
+      { to: "receipt", title: "Receive", hint: "Party paid you cash or metal", Icon: ArrowDownToLine, tint: "bg-emerald-100 text-emerald-800" },
+      { to: "payment", title: "Pay Out", hint: "You paid cash or metal", Icon: ArrowUpFromLine, tint: "bg-orange-100 text-orange-800" },
     ],
   },
   {
     title: "Khata",
     items: [
-      { to: "conversion", title: "Fix rate", hint: "Turn metal dues into cash or back", Icon: Percent, tint: "bg-violet-100 text-violet-800" },
+      { to: "conversion", title: "Convert", hint: "Turn metal dues into cash or back (fix rate)", Icon: Percent, tint: "bg-violet-100 text-violet-800" },
       { to: "opening", title: "Opening balance", hint: "Old khata balance for a party", Icon: BookOpen, tint: "bg-stone-200 text-stone-700" },
     ],
   },
