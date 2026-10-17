@@ -40,13 +40,14 @@ export function Review({ voucher, cash, gold, silver, partyName, posting, error,
   onBack: () => void;
   onConfirm: () => void;
 }) {
+  const typeName = (en.voucher as Record<string, string>)[voucher.type.toLowerCase()] ?? voucher.type;
   return (
     <div className="flex flex-col gap-3">
       <div className="overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-sm">
         <div className="flex items-center gap-2.5 p-4 pb-3">
           <span className={cn("h-3 w-3 shrink-0 rounded-full", DOT[voucher.type] ?? "bg-stone-400")} />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-base font-bold text-stone-900">{voucher.type} · {partyName}</div>
+            <div className="truncate text-base font-bold text-stone-900">{typeName} · {partyName}</div>
             <div className="text-xs text-stone-500">{voucher.businessDate}{voucher.referenceNumber ? ` · Bill ${voucher.referenceNumber}` : ""}</div>
           </div>
         </div>

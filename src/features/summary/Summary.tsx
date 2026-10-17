@@ -1,7 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { Link } from "react-router";
-import { BalanceGrid, Card, Page } from "../../components/ui/Card.tsx";
+import { Card, Page } from "../../components/ui/Card.tsx";
 import { Chip } from "../../components/ui/Bits.tsx";
 import { Field, Input } from "../../components/ui/Field.tsx";
 import { Segmented } from "../../components/ui/Segmented.tsx";
@@ -13,6 +13,7 @@ import { cn } from "../../lib/cn.ts";
 import { en } from "../../i18n/en.ts";
 import { dayLabel, todayLocal } from "../../lib/format.ts";
 import { useAllBalancesLive, usePartyList } from "../../hooks/useLive.ts";
+import { MarketHero } from "./MarketHero.tsx";
 
 type Preset = "Today" | "7 days" | "Month" | "Custom";
 
@@ -80,10 +81,6 @@ export function SummaryPage() {
     )
     .slice(0, 3);
 
-  const netCash = rows.reduce((n, [, b]) => n + b.cashPaise, 0);
-  const netGold = rows.reduce((n, [, b]) => n + b.goldFineMg, 0);
-  const netSilver = rows.reduce((n, [, b]) => n + b.silverFineMg, 0);
-
   const period = (entries ?? []).reduce(
     (t, e) => ({
       cash: t.cash + e.cashDeltaPaise,
@@ -96,10 +93,7 @@ export function SummaryPage() {
 
   return (
     <Page title={en.nav.summary}>
-      <div className="rounded-3xl bg-stone-900 p-5 text-white shadow-md">
-        <div className="mb-3 text-xs font-semibold uppercase tracking-widest text-stone-400">Business position</div>
-        <BalanceGrid cashPaise={netCash} goldFineMg={netGold} silverFineMg={netSilver} dark />
-      </div>
+      <MarketHero />
 
       {toReceive.length > 0 && (
         <Card>
