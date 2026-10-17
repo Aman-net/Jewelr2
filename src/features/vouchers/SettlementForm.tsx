@@ -9,6 +9,7 @@ import { FlowHeader, StickyCta, type FlowTone } from "../../components/ui/Flow.t
 import { useLeaveGuard } from "../../hooks/useLeaveGuard.tsx";
 import { SuccessView } from "../../components/ui/Success.tsx";
 import { MetalTag } from "../../components/ui/TypeTag.tsx";
+import { SHOP_ID } from "../../data/db.ts";
 import { postVoucher } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import type { BalanceDelta, PaymentMode, Voucher } from "../../domain/index.ts";
@@ -106,7 +107,7 @@ export function SettlementForm({ kind }: { kind: "RECEIPT" | "PAYMENT" }) {
       }
       const built = buildVoucher({
         id: voucherId,
-        shopId: "shop-local-1",
+        shopId: SHOP_ID,
         type: kind,
         partyId: v.partyId,
         businessDate: v.businessDate,

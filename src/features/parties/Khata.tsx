@@ -72,9 +72,20 @@ export function KhataPage() {
     const rows = await listVouchers({ partyId: id });
     return new Map(rows.map((v) => [v.id, v]));
   }, [id]);
+  // A from-date truncates the past, so the running "Bal" must start from the
+  // TRUE balance before that day — not zero. (from = "" → full history, no seed.)
+  const seedBalances = useLiveQuery(
+    () => (from ? getBalancesAsOf(id, dayBefore(from)) : undefined),
+    [id, from],
+  );
+  const seed = from ? seedBalances : undefined;
 
   const groups = useMemo(() => {
-    const running = { cash: 0, gold: 0, silver: 0 };
+    const running = {
+      cash: seed?.cashPaise ?? 0,
+      gold: seed?.goldFineMg ?? 0,
+      silver: seed?.silverFineMg ?? 0,
+    };
     const chronological = (entries ?? []).map((e) => {
       const row = {
         e,
@@ -96,7 +107,7 @@ export function KhataPage() {
     return [...byDay.entries()]
       .sort((a, b) => b[0].localeCompare(a[0]))
       .map(([date, rows]) => ({ date, rows: rows.reverse() }));
-  }, [entries]);
+  }, [entries, seed]);
 
   const totalRows = groups.reduce((n, g) => n + g.rows.length, 0);
   let shown = 0;
@@ -203,6 +214,17 @@ export function KhataPage() {
       </div>
 
       {entries === undefined && <LoadingRow />}
+      {entries === undefined ? null : from ? (
+        seed ? (
+          <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-[11px] tabular-nums text-stone-600">
+            Balance before {dayLabel(from)}: {balParts(seed.cashPaise, seed.goldFineMg, seed.silverFineMg) || formatINR(0)}
+          </div>
+        ) : null
+      ) : type !== "All" ? (
+        <p className="text-[11px] text-stone-500">
+          Filtered view — the “Bal” line counts these entries from zero, not the account balance. Use Past balance for true snapshots.
+        </p>
+      ) : null}
       {entries !== undefined && groups.length === 0 && (
         <Card><p className="text-sm text-stone-500">No entries yet. Tap Sell or Got above to record the first one.</p></Card>
       )}
@@ -287,6 +309,23 @@ export function KhataPage() {
       )}
     </Page>
   );
+}
+
+/** Day before a YYYY-MM-DD date. */
+function dayBefore(yyyyMmDd: string): string {
+  const [y, m, d] = yyyyMmDd.split("-").map(Number);
+  const dt = new Date(y ?? 0, (m ?? 1) - 1, (d ?? 1) - 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
+/** Signed parts for a balance strip: "+₹500 · +G 10 g · −S 2 g". */
+function balParts(cash: number, gold: number, silver: number): string {
+  const signed = (v: number, t: string) => (v === 0 ? null : `${v > 0 ? "+" : "−"}${t}`);
+  return [
+    signed(cash, formatINR(Math.abs(cash))),
+    gold !== 0 ? `${gold > 0 ? "+" : "−"}G ${formatGram(Math.abs(gold))}` : null,
+    silver !== 0 ? `${silver > 0 ? "+" : "−"}S ${formatGram(Math.abs(silver))}` : null,
+  ].filter((x): x is string => x !== null).join(" · ");
 }
 
 function shortType(description: string): string {

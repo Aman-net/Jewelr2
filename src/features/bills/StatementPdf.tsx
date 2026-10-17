@@ -130,7 +130,7 @@ export function buildDocDetails(v: Voucher): string[] {
       out.push(`Labour ${basis} = ${rs2(l.labourPaise)}`);
     }
   }
-  for (const m of v.misc) out.push(`${m.label} (extra) ${rs2(m.cashPaise)}`);
+  for (const m of v.misc) out.push(`${m.label} ${m.cashPaise > 0 ? "(extra)" : "(discount)"} ${rs2(m.cashPaise)}`);
   const s = v.settlement;
   if (s) {
     if (s.goldFineMg > 0) out.push(`Gold ${s.goldPhysicalMg ? `${g3(s.goldPhysicalMg, "GOLD")} x ${formatTunch(s.goldTunchScaled ?? 0)} = ` : ""}${g3(s.goldFineMg, "GOLD")} fine`);

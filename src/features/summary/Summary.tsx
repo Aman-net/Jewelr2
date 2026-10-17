@@ -47,8 +47,25 @@ export function SummaryPage() {
   const nameOf = (id: string) => (parties ?? []).find((p) => p.id === id)?.name ?? "…";
 
   const rows = Object.entries(balances ?? {});
-  const toReceive = rows.filter(([, b]) => b.cashPaise > 0).sort((a, b) => b[1].cashPaise - a[1].cashPaise).slice(0, 3);
-  const toPay = rows.filter(([, b]) => b.cashPaise < 0).sort((a, b) => a[1].cashPaise - b[1].cashPaise).slice(0, 3);
+  // Any-column dues count (a party owing only metal is invisible to a
+  // cash-only filter). Ranked metal-first — metal settles in metal, so grams
+  // owed decide who gets acted on; cash breaks ties.
+  const toReceive = rows
+    .filter(([, b]) => b.cashPaise > 0 || b.goldFineMg > 0 || b.silverFineMg > 0)
+    .sort((a, b) =>
+      b[1].goldFineMg - a[1].goldFineMg
+      || b[1].silverFineMg - a[1].silverFineMg
+      || b[1].cashPaise - a[1].cashPaise,
+    )
+    .slice(0, 3);
+  const toPay = rows
+    .filter(([, b]) => b.cashPaise < 0 || b.goldFineMg < 0 || b.silverFineMg < 0)
+    .sort((a, b) =>
+      a[1].goldFineMg - b[1].goldFineMg
+      || a[1].silverFineMg - b[1].silverFineMg
+      || a[1].cashPaise - b[1].cashPaise,
+    )
+    .slice(0, 3);
 
   const netCash = rows.reduce((n, [, b]) => n + b.cashPaise, 0);
   const netGold = rows.reduce((n, [, b]) => n + b.goldFineMg, 0);
@@ -74,6 +91,7 @@ export function SummaryPage() {
       {toReceive.length > 0 && (
         <Card>
           <div className="mb-1 text-sm font-semibold text-emerald-800">Top to receive</div>
+          <p className="mb-2 text-xs text-stone-500">Ranked metal first — grams owed before cash.</p>
           {toReceive.map(([partyId, b]) => (
             <Link key={partyId} to={`/parties/${partyId}`} className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0">
               <PartyAvatar name={nameOf(partyId)} />

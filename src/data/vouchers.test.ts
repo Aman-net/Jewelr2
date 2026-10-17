@@ -104,6 +104,7 @@ describe("postVoucher", () => {
         type: "ADJUSTMENT",
         partyId,
         businessDate: "2026-01-13",
+        notes: "Cash dust after exchange",
         adjustment: { cashPaise: -50, goldFineMg: 0, silverFineMg: 0 },
       },
       tdb,

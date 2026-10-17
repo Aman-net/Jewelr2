@@ -42,7 +42,10 @@ labour ₹  = round(physicalMg * labourPaisePerGram / 1000)
 ## Owner-confirmed additions (2026-10-15, confirmed in chat with worked examples)
 
 - **Misc charges:** voucher-level labelled cash extras on SALE/PURCHASE only;
-  sign follows voucher direction (sale +, purchase −).
+  sign follows voucher direction (sale +, purchase −). Signed amounts are
+  allowed: a negative value is a discount/rebate (kamayi) — it reduces the
+  cash due on sale and the shop's cash debt on purchase. Zero amounts are
+  rejected (a labelled ₹0 row is always operator error).
 - **Conversion sides:** every conversion carries `side` (`PARTY_OWES` shrinks
   party dues, `SHOP_OWES` shrinks shop dues) alongside direction. The four
   confirmed cases (Ex.1–Ex.4 in chat 2026-10-15): metal→cash and cash→metal
@@ -68,6 +71,19 @@ returns = reversal + replacement/`ADJUSTMENT`; payment mode is a tag only.
 - **Role direction** (owner-confirmed 2026-10-15): SALE needs `isCustomer`,
   PURCHASE needs `isSupplier` (`assertRoleDirection`). Unknown parties are
   rejected. Money flows and openings stay open to all roles.
+
+## No-silent-zero guards (added 2026-10-16, review approved)
+
+- **Tunch must be > 0** wherever it bills: sale/purchase line
+  `agreedTunchScaled > 0`; received metal (settlement) requires a tunch > 0
+  whenever the weight is present. A 0% or missing tunch would otherwise
+  silently zero the fine owed/credited.
+- **Silver must be ≥ 1 g** on trade lines and settlements (whole-gram rule):
+  a 0.6 g entry would round UP to 1 g silently, so sub-gram silver input is
+  rejected outright.
+- **ADJUSTMENT requires a reason** in `notes` (same discipline stock
+  adjustments already had). It is a manual balance delta; the khata must
+  explain itself.
 
 ## Agent assumption (no brief rule)
 

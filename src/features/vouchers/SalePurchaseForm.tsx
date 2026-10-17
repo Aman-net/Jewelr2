@@ -10,6 +10,7 @@ import { FlowHeader, StickyCta, type FlowTone } from "../../components/ui/Flow.t
 import { useLeaveGuard } from "../../hooks/useLeaveGuard.tsx";
 import { Segmented } from "../../components/ui/Segmented.tsx";
 import { SuccessView } from "../../components/ui/Success.tsx";
+import { SHOP_ID } from "../../data/db.ts";
 import { checkShortSale, getItemCfg, getLastRate, postVoucher, setLastRate } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import { fineToCash, GOLD_QUOTE_MG, SILVER_QUOTE_MG } from "../../domain/numeric/metalValue.ts";
@@ -198,7 +199,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
       if (v.lines.length === 0) throw new Error("Add at least one line");
       const built = buildVoucher({
         id: voucherId,
-        shopId: "shop-local-1",
+        shopId: SHOP_ID,
         type: kind,
         partyId: v.partyId,
         businessDate: v.businessDate,
@@ -234,7 +235,8 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
           .filter((m) => m.label.trim() || m.amount.trim())
           .map((m, i) => {
             if (!m.label.trim()) throw new Error(`Charge ${i + 1}: label is required`);
-            return { label: m.label.trim(), cashPaise: parseRupeesToPaise(m.amount) };
+            // Signed: negative amount = discount/kamayi.
+            return { label: m.label.trim(), cashPaise: parseRupeesToPaise(m.amount, true) };
           }),
       });
       setPreview(built);
@@ -389,7 +391,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
               <button type="button" className="text-sm font-medium text-amber-800" onClick={() => miscFields.append(emptyMisc())}>+ Add</button>
             </div>
             {miscFields.fields.length === 0 && (
-              <p className="text-xs text-stone-500">Packing, transport… added to the cash due.</p>
+              <p className="text-xs text-stone-500">Packing, transport… added to the cash due. Use a − amount for a discount.</p>
             )}
             <div className="flex flex-col gap-2">
               {miscFields.fields.map((f, i) => (
@@ -398,7 +400,7 @@ export function SalePurchaseForm({ kind }: { kind: "SALE" | "PURCHASE" }) {
                     <Input {...register(`misc.${i}.label`)} placeholder="e.g. Packing" />
                   </Field>
                   <Field label={i === 0 ? "₹" : ""}>
-                    <Input {...register(`misc.${i}.amount`)} inputMode="decimal" placeholder="0.00" />
+                    <Input {...register(`misc.${i}.amount`)} inputMode="decimal" placeholder="0.00 (− = discount)" />
                   </Field>
                   <button type="button" className="pb-2.5 text-sm font-medium text-red-700" onClick={() => miscFields.remove(i)}>✕</button>
                 </div>

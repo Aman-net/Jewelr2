@@ -24,7 +24,8 @@ const lineInputSchema = z.object({
   itemCount: z.number().int().positive().optional(),
   physicalMg: z.number().int().positive(),
   recordedTunchScaled: z.number().int().min(0).max(10_000).optional(),
-  agreedTunchScaled: z.number().int().min(0).max(10_000),
+  // 0% tunch on a billed line would silently zero the fine owed — reject it.
+  agreedTunchScaled: z.number().int().gt(0).max(10_000),
   pricingMode: z.enum(["CASH_AT_RATE", "METAL_OPEN"]),
   rateAmountPaise: z.number().int().positive().optional(),
   rateUnit: z.enum(["GOLD_PER_10G", "SILVER_PER_KG"]).optional(),
@@ -45,7 +46,8 @@ const lineInputSchema = z.object({
 
 const miscSchema = z.object({
   label: z.string().trim().min(1).max(60),
-  cashPaise: z.number().int().positive(),
+  // Signed: positive = extra charge, negative = discount/rebate (kamayi).
+  cashPaise: z.number().int().refine((v) => v !== 0, { message: "Charge amount must be non-zero (use a negative amount for discounts)" }),
 });
 
 const settlementSchema = z.object({
@@ -55,7 +57,13 @@ const settlementSchema = z.object({
   silverPhysicalMg: z.number().int().nonnegative().optional(),
   silverTunchScaled: z.number().int().min(0).max(10_000).optional(),
   paymentMode: z.enum(["CASH", "UPI", "BANK"]).optional(),
-});
+}).refine(
+  (s) => (s.goldPhysicalMg ? s.goldTunchScaled !== undefined && s.goldTunchScaled > 0 : true),
+  { message: "Gold weight requires tunch above 0" },
+).refine(
+  (s) => (s.silverPhysicalMg ? s.silverTunchScaled !== undefined && s.silverTunchScaled > 0 : true),
+  { message: "Silver weight requires tunch above 0" },
+);
 
 const conversionSchema = z.object({
   direction: z.enum(["CASH_TO_METAL", "METAL_TO_CASH"]),

@@ -8,6 +8,7 @@ import { FlowHeader, StickyCta } from "../../components/ui/Flow.tsx";
 import { useLeaveGuard } from "../../hooks/useLeaveGuard.tsx";
 import { Segmented } from "../../components/ui/Segmented.tsx";
 import { SuccessView } from "../../components/ui/Success.tsx";
+import { SHOP_ID } from "../../data/db.ts";
 import { getLastRate, postVoucher, setLastRate } from "../../data/index.ts";
 import { buildVoucher, voucherDeltas } from "../../domain/index.ts";
 import { GOLD_QUOTE_MG, SILVER_QUOTE_MG, cashToGoldFine, cashToSilverFine, fineToCash } from "../../domain/numeric/metalValue.ts";
@@ -98,7 +99,7 @@ export function ConversionForm() {
       if (fineMg <= 0) throw new Error(v.direction === "METAL_TO_CASH" ? "Fine weight must be positive" : "Cash amount must be positive");
       const built = buildVoucher({
         id: voucherId,
-        shopId: "shop-local-1",
+        shopId: SHOP_ID,
         type: "CONVERSION",
         partyId: v.partyId,
         businessDate: v.businessDate,

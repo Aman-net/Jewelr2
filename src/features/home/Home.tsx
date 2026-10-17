@@ -25,10 +25,23 @@ export function HomePage() {
   const [q, setQ] = useState("");
   const [duesView, setDuesView] = useState<"combined" | "sale" | "purchase">("combined");
   const query = q.trim().toLowerCase();
+  // Metal dues lead the list: owners settle metal in metal, so parties owed
+  // anything in gold/silver rank before cash-only parties. Within each group,
+  // receivable metal first (biggest Get-gold), then silver, then cash size.
+  const hasMetalDue = (b: { goldFineMg: number; silverFineMg: number }) => b.goldFineMg !== 0 || b.silverFineMg !== 0;
   const partyRows = (parties ?? [])
     .map((p) => ({ p, b: balances?.[p.id] ?? { cashPaise: 0, goldFineMg: 0, silverFineMg: 0 } }))
     .filter(({ p }) => !query || p.name.toLowerCase().includes(query) || (p.mobile ?? "").includes(query))
-    .sort((a, b) => Math.abs(b.b.cashPaise) - Math.abs(a.b.cashPaise));
+    .sort((a, b) => {
+      const am = hasMetalDue(a.b);
+      const bm = hasMetalDue(b.b);
+      if (am !== bm) return am ? -1 : 1;
+      if (am) {
+        if (a.b.goldFineMg !== b.b.goldFineMg) return b.b.goldFineMg - a.b.goldFineMg;
+        if (a.b.silverFineMg !== b.b.silverFineMg) return b.b.silverFineMg - a.b.silverFineMg;
+      }
+      return Math.abs(b.b.cashPaise) - Math.abs(a.b.cashPaise);
+    });
 
   // Market-wide buckets: what customers owe you (sale) vs what you owe
   // suppliers (purchase). Netting them hides both flows — hence the toggle.

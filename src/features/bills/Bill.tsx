@@ -261,20 +261,26 @@ export function BillPage() {
   const [to, setTo] = useState(() => todayLocal());
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState("");
+  const [attempt, setAttempt] = useState(0);
 
   const party = useLiveQuery(() => getParty(id), [id]);
   const data = useLiveQuery(async () => {
-    const st = await getStatement(id, from, to).catch(() => undefined);
-    if (!st) return undefined;
-    const vouchers = new Map<string, Voucher>();
-    await Promise.all(
-      st.rows.map(async (r) => {
-        const v = await assembleVoucher(db, r.voucherId);
-        if (v) vouchers.set(r.voucherId, v);
-      }),
-    );
-    return { st, vouchers };
-  }, [id, from, to]);
+    try {
+      const st = await getStatement(id, from, to);
+      if (!st) return { st: undefined, vouchers: undefined, error: "" };
+      const vouchers = new Map<string, Voucher>();
+      await Promise.all(
+        st.rows.map(async (r) => {
+          const v = await assembleVoucher(db, r.voucherId);
+          if (v) vouchers.set(r.voucherId, v);
+        }),
+      );
+      return { st, vouchers, error: "" };
+    } catch (e) {
+      // Query failure must show an error state, never hang on "Building bill…".
+      return { st: undefined, vouchers: undefined, error: e instanceof Error ? e.message : "Could not build the bill" };
+    }
+  }, [id, from, to, attempt]);
   // Frozen at generation: a print viewed months later must not read as "today".
   const generatedAt = useMemo(
     () => new Date().toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }),
@@ -282,7 +288,7 @@ export function BillPage() {
     [from, to],
   );
   const groups = useMemo(() => {
-    const rows = data?.st.rows ?? [];
+    const rows = data?.st?.rows ?? [];
     const byDay = new Map<string, typeof rows>();
     for (const r of rows) {
       const list = byDay.get(r.businessDate) ?? [];
@@ -410,7 +416,17 @@ export function BillPage() {
         </Card>
       </div>
 
-      {statement === undefined ? (
+      {data === undefined ? (
+        <LoadingRow label="Building bill…" />
+      ) : data.error ? (
+        <Card>
+          <p className="text-sm font-semibold text-red-700">Couldn't build the bill.</p>
+          <p className="mt-1 text-xs text-stone-500">{data.error}</p>
+          <Button variant="secondary" className="mt-3" onClick={() => { setAttempt((a) => a + 1); }}>
+            Retry
+          </Button>
+        </Card>
+      ) : statement === undefined ? (
         <LoadingRow label="Building bill…" />
       ) : (
         <div className="bill-sheet flex flex-col gap-3">

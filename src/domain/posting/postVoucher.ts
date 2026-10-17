@@ -42,6 +42,13 @@ function snapshotLine(
   index: number,
   line: SalePurchaseLineInput,
 ): SalePurchaseLine {
+  // Owner-confirmed whole-gram silver everywhere: a sub-gram line would round
+  // UP to 1 g silently. Block it instead — silver goods are weighed in grams.
+  if (line.metalType === "SILVER" && line.physicalMg < 1_000) {
+    throw new Error(
+      `Line ${index + 1}: silver below 1 g is not supported (whole-gram rule) — enter at least 1 g`,
+    );
+  }
   const billingTunch = selectBillingTunch(line.recordedTunchScaled, line.agreedTunchScaled);
   // Canonical weights: silver rounds to whole grams at snapshot time.
   const physicalMg = roundMetalMg(line.physicalMg, line.metalType);
@@ -68,6 +75,14 @@ function snapshotLine(
 }
 
 function snapshotSettlement(s: SettlementInput): SettlementSnapshot {
+  // Same whole-gram silver guard as sale lines: receiving sub-gram silver
+  // would round UP to 1 g of fine silently.
+  if (s.silverPhysicalMg !== undefined && s.silverPhysicalMg > 0 && s.silverPhysicalMg < 1_000) {
+    throw new Error("Silver below 1 g is not supported (whole-gram rule) — enter at least 1 g");
+  }
+  if (s.goldPhysicalMg !== undefined && s.goldPhysicalMg > 0 && s.goldTunchScaled !== undefined && s.goldTunchScaled === 0) {
+    throw new Error("Gold received needs tunch above 0");
+  }
   return {
     ...s,
     goldPhysicalMg: s.goldPhysicalMg !== undefined ? roundMetalMg(s.goldPhysicalMg, "GOLD") : undefined,
@@ -121,6 +136,10 @@ export function buildVoucher(input: VoucherInput): Voucher {
   if (parsed.type === "CONVERSION" && !parsed.conversion) throw new Error("CONVERSION requires conversion");
   if (parsed.type === "OPENING" && !parsed.opening) throw new Error("OPENING requires opening");
   if (parsed.type === "ADJUSTMENT" && !parsed.adjustment) throw new Error("ADJUSTMENT requires adjustment");
+  // ADJUSTMENT moves balances by hand; the khata must explain itself.
+  if (parsed.type === "ADJUSTMENT" && !parsed.notes?.trim()) {
+    throw new Error("Add a reason in the notes for this adjustment");
+  }
   if (parsed.type === "REVERSAL" && (!parsed.reversesVoucherId || !parsed.reversalReason)) {
     throw new Error("REVERSAL requires reversesVoucherId and reversalReason");
   }

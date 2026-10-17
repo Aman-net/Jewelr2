@@ -7,6 +7,7 @@ import {
   toLedgerEntry,
   voucherDeltas,
 } from "../index.ts";
+import { GOLD_QUOTE_MG, fineToCash } from "../numeric/metalValue.ts";
 import type { VoucherInput } from "../index.ts";
 
 const SHOP = "11111111-1111-4111-8111-111111111111";
@@ -312,15 +313,135 @@ describe("RECEIPT / PAYMENT / CONVERSION / OPENING / ADJUSTMENT", () => {
     expect(voucherDeltas(v)).toEqual({ cashPaise: 500_000, goldFineMg: 20_000, silverFineMg: 0 });
   });
 
-  it("ADJUSTMENT posts an explicit manual delta (silver rounds to grams)", () => {
+  it("ADJUSTMENT requires a reason and posts an explicit manual delta (silver rounds to grams)", () => {
+    expect(() =>
+      buildVoucher(
+        base({
+          id: "dddddddd-dddd-4d33-8ddd-dddddddddddd",
+          type: "ADJUSTMENT",
+          adjustment: { cashPaise: -500, goldFineMg: 0, silverFineMg: 1500 },
+        }),
+      ),
+    ).toThrow(/reason/);
     const v = buildVoucher(
       base({
         id: "dddddddd-dddd-4d33-8ddd-dddddddddddd",
         type: "ADJUSTMENT",
+        notes: "Silver dust adjust after exchange",
         adjustment: { cashPaise: -500, goldFineMg: 0, silverFineMg: 1500 },
       }),
     );
     expect(voucherDeltas(v)).toEqual({ cashPaise: -500, goldFineMg: 0, silverFineMg: 2000 });
+  });
+});
+
+describe("input guards (no silent zeros)", () => {
+  it("rejects a billed line at 0% tunch (would owe zero fine)", () => {
+    expect(() =>
+      buildVoucher(
+        base({
+          id: "9a111111-9111-4111-8911-111111111111",
+          type: "SALE",
+          lines: [{
+            metalType: "GOLD",
+            categoryName: "A",
+            physicalMg: 10_000,
+            agreedTunchScaled: 0,
+            pricingMode: "METAL_OPEN",
+          }],
+        }),
+      ),
+    ).toThrow(/tunch/i);
+  });
+
+  it("rejects received metal weight without tunch (would credit zero fine)", () => {
+    expect(() =>
+      buildVoucher(
+        base({
+          id: "9a222222-9222-4222-8922-222222222222",
+          type: "RECEIPT",
+          settlement: { goldPhysicalMg: 10_000 },
+        }),
+      ),
+    ).toThrow(/tunch/i);
+    expect(() =>
+      buildVoucher(
+        base({
+          id: "9a333333-9333-4333-8933-333333333333",
+          type: "RECEIPT",
+          settlement: { silverPhysicalMg: 50_000, silverTunchScaled: 0 },
+        }),
+      ),
+    ).toThrow(/tunch/i);
+  });
+
+  it("rejects sub-gram silver on sale lines and settlements (whole-gram rule)", () => {
+    expect(() =>
+      buildVoucher(
+        base({
+          id: "9a444444-9444-4444-8944-444444444444",
+          type: "SALE",
+          lines: [{
+            metalType: "SILVER",
+            categoryName: "Saharay",
+            physicalMg: 600,
+            agreedTunchScaled: 9700,
+            pricingMode: "METAL_OPEN",
+          }],
+        }),
+      ),
+    ).toThrow(/whole-gram|1 g/i);
+    expect(() =>
+      buildVoucher(
+        base({
+          id: "9a555555-9555-4555-8955-555555555555",
+          type: "RECEIPT",
+          settlement: { silverPhysicalMg: 500, silverTunchScaled: 9700 },
+        }),
+      ),
+    ).toThrow(/whole-gram|1 g/i);
+  });
+
+  it("negative misc is a discount: sale pays offset, purchase direction flips", () => {
+    const sale = buildVoucher(
+      base({
+        id: "9a666666-9666-4666-8966-666666666666",
+        type: "SALE",
+        notes: "Kamayi on bulk order",
+        lines: [{
+          metalType: "GOLD",
+          categoryName: "Chain",
+          physicalMg: 10_000,
+          agreedTunchScaled: 9160,
+          pricingMode: "CASH_AT_RATE",
+          rateAmountPaise: 7_980_000,
+          rateUnit: "GOLD_PER_10G",
+        }],
+        misc: [{ label: "Kamayi", cashPaise: -12_500 }],
+      }),
+    );
+    const lineCash = fineToCash(9_160, 7_980_000, GOLD_QUOTE_MG);
+    expect(sale.lines[0]?.lineCashPaise).toBe(lineCash);
+    expect(voucherDeltas(sale).cashPaise).toBe(lineCash - 12_500);
+
+    const purchase = buildVoucher(
+      base({
+        id: "9a777777-9777-4777-8977-777777777777",
+        type: "PURCHASE",
+        notes: "Bulk rebate",
+        lines: [{
+          metalType: "GOLD",
+          categoryName: "Bar",
+          physicalMg: 10_000,
+          agreedTunchScaled: 10_000,
+          pricingMode: "CASH_AT_RATE",
+          rateAmountPaise: 7_980_000,
+          rateUnit: "GOLD_PER_10G",
+        }],
+        misc: [{ label: "Rebate", cashPaise: -5_000 }],
+      }),
+    );
+    expect(voucherDeltas(purchase).cashPaise).toBe(-(7_980_000 - 5_000));
   });
 });
 
